@@ -3,6 +3,10 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 export const signMeta = (rawBody: string, secret: string): string =>
   `sha256=${createHmac('sha256', secret).update(rawBody, 'utf8').digest('hex')}`;
 
+// WAHA sends the hex HMAC in X-Webhook-Hmac, with X-Webhook-Hmac-Algorithm: sha512.
+export const signWaha = (rawBody: string, key: string): string =>
+  createHmac('sha512', key).update(rawBody, 'utf8').digest('hex');
+
 export function safeEqual(a: string, b: string): boolean {
   const x = Buffer.from(a);
   const y = Buffer.from(b);

@@ -1,8 +1,9 @@
 import type { Db } from '../src/core/db.ts';
+import { hashIdentifier } from '../src/core/pii.ts';
 import { previewRules, rebuild } from '../src/core/replay.ts';
 import { getState, type State } from '../src/core/state.ts';
 import type { Rules } from '../src/core/types.ts';
-import { CAMPAIGNS, PEOPLE, QR_CODE, SECRETS_IN_FIXTURES } from './fixtures.ts';
+import { CAMPAIGNS, CARLA_FIRST_MESSAGE_ID, PEOPLE, QR_CODE, SECRETS_IN_FIXTURES } from './fixtures.ts';
 
 export interface CheckContext { db: Db; state: State; rules: Rules }
 export interface Check { afterStep: string; scenario: string; expected: string; run(ctx: CheckContext): { ok: boolean; actual: string } }
@@ -43,7 +44,7 @@ export const checks: Check[] = [
   { afterStep: 'carla-whatsapp-code', scenario: S2, expected: 'Carla vai para a fila de vendas do Rio', run: ({ state }) => ok(routes(state, PEOPLE.carla.name).join() === 'sales-rj', routes(state, PEOPLE.carla.name).join() || 'sem fila') },
   { afterStep: 'carla-whatsapp-duplicate', scenario: S4, expected: 'A mensagem repetida não cria outro toque', run: ({ state }) => ok(touchesOf(state, PEOPLE.carla.name).length === 1, `${touchesOf(state, PEOPLE.carla.name).length} toque(s)`) },
   { afterStep: 'carla-whatsapp-duplicate', scenario: S4, expected: 'A repetição fica contada', run: ({ state }) => {
-    const d = state.duplicates.find((x) => x.source === 'whatsapp' && x.externalId === 'wamid.CARLA-1')?.count ?? 0;
+    const d = state.duplicates.find((x) => x.source === 'whatsapp' && x.externalId === hashIdentifier('wa_message', CARLA_FIRST_MESSAGE_ID))?.count ?? 0;
     return ok(d === 1, `${d} repetição(ões)`);
   } },
   { afterStep: 'carla-whatsapp-duplicate', scenario: S4, expected: 'A conversa não é encaminhada duas vezes', run: ({ state }) => ok(routes(state, PEOPLE.carla.name).length === 1, `${routes(state, PEOPLE.carla.name).length} encaminhamento(s)`) },
@@ -121,7 +122,7 @@ export const checks: Check[] = [
       o ? `${o.status} · ${o.erpSaleId} · ${describeChannel(state, o.firstTouchSeq)}` : 'sem oportunidade');
   } },
   { afterStep: 'end', scenario: X2, expected: 'O log não guarda telefone, e-mail nem nome em claro', run: ({ db }) => {
-    const log = (db.prepare('SELECT payload FROM events').all() as { payload: string }[]).map((r) => r.payload).join('\n');
+    const log = (db.prepare("SELECT external_id || ' ' || payload AS t FROM events").all() as { t: string }[]).map((r) => r.t).join('\n');
     const leaks = SECRETS_IN_FIXTURES.filter((s) => log.includes(s));
     return ok(leaks.length === 0, leaks.length ? `vazou: ${leaks.join(', ')}` : 'nenhum dado pessoal no log');
   } },

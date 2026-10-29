@@ -6,14 +6,15 @@ import type { Payload } from './events.ts';
 import { alertText, findCoverageDrop } from './monitor.ts';
 import { isValidCampaign } from './naming.ts';
 import { getEntryPoint, getTouch, touchesOfEntryPoint } from './queries.ts';
-import type { AnyEventInput, EventRow, Rules } from './types.ts';
+import type { AnyEventInput, EventRow, Fetch, Rules } from './types.ts';
 
 // Live entry point: store, project, then react. Reactions write new events; replay only projects.
-export function ingest(db: Db, input: AnyEventInput, rules: Rules, transient: { text?: string } = {}): ApplyResult {
+// fetch reaches the ERP and the WhatsApp provider; tests and verify run offline.
+export async function ingest(db: Db, input: AnyEventInput, rules: Rules, transient: { text?: string } = {}, fetchImpl: Fetch = fetch): Promise<ApplyResult> {
   const r = appendAndProject(db, input, rules);
   if (!r.event || r.error) return r;
-  if (r.event.type === 'whatsapp_message_received') aiReaction(db, r.event as EventRow<'whatsapp_message_received'>, transient.text ?? '', rules);
-  if (r.event.type === 'form_submitted' || r.event.type === 'whatsapp_message_received') monitorReaction(db, r.event.seq, r.event.occurredAt, rules);
+  if (r.event.type === 'whatsapp_message_received') await aiReaction(db, r.event as EventRow<'whatsapp_message_received'>, transient.text ?? '', rules, fetchImpl);
+  if (r.event.type === 'form_submitted' || r.event.type === 'whatsapp_message_received') await monitorReaction(db, r.event.seq, r.event.occurredAt, rules);
   return r;
 }
 
@@ -21,7 +22,7 @@ function raise(db: Db, seq: number, occurredAt: string, payload: Payload<'alert_
   appendAndProject(db, { source: 'monitor', externalId: `alert:${payload.kind}:${payload.entryPoint}:${seq}`, type: 'alert_raised', occurredAt, actor: 'monitor', payload }, rules);
 }
 
-export function monitorReaction(db: Db, seq: number, occurredAt: string, rules: Rules): void {
+export async function monitorReaction(db: Db, seq: number, occurredAt: string, rules: Rules): Promise<void> {
   const touch = getTouch(db, seq);
   const code = touch?.fields.entryPoint.value;
   if (!touch || touch.isTest || !code) return;
@@ -37,5 +38,5 @@ export function monitorReaction(db: Db, seq: number, occurredAt: string, rules: 
   if (!affected) return;
   const text = alertText(ep.label, affected[0].occurredAt, affected.length, ep.owner);
   raise(db, seq, occurredAt, { entryPoint: code, kind: 'campaign_coverage_drop', message: text.message, action: text.action, owner: ep.owner }, rules);
-  callTool(db, 'set_entry_point_status', { code, status: 'auditing', reason: text.message }, 'monitor', rules, occurredAt);
+  await callTool(db, 'set_entry_point_status', { code, status: 'auditing', reason: text.message }, 'monitor', rules, occurredAt);
 }

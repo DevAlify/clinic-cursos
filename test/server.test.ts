@@ -6,33 +6,36 @@ import { signMeta } from '../src/gateway/signature.ts';
 import { createApp } from '../src/server.ts';
 
 const fresh = () => createApp({ openFresh: () => openDb() });
-const waBody = (wamid: string, text: string) => JSON.stringify({
+const waBody = (wamid: string, text: string, referral?: { source_id: string; source_type: string; ctwa_clid: string }) => JSON.stringify({
   object: 'whatsapp_business_account',
   entry: [{ id: 'WABA', changes: [{ field: 'messages', value: {
     messaging_product: 'whatsapp', metadata: { display_phone_number: '551930000003', phone_number_id: 'P' },
     contacts: [{ profile: { name: 'Daniel Rocha' }, wa_id: '5519977770003', user_id: 'BR.DANIEL0003' }],
-    messages: [{ from: '5519977770003', from_user_id: 'BR.DANIEL0003', id: wamid, timestamp: '1761750000', type: 'text', text: { body: text } }],
+    messages: [{ from: '5519977770003', from_user_id: 'BR.DANIEL0003', id: wamid, timestamp: '1761750000', type: 'text', text: { body: text }, referral }],
   } }] }],
 });
 const post = (app: ReturnType<typeof fresh>['app'], path: string, body: string, headers: Record<string, string> = {}) =>
   app.request(path, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body });
 
-test('WhatsApp webhooks need a valid signature over the raw body', async () => {
+test('Meta webhooks need the sha256 signature over the raw body and keep the ad referral', async () => {
   const { app, getDb } = fresh();
-  const body = waBody('wamid.T1', 'Oi, quanto custa o curso de harmonização?');
-  assert.equal((await post(app, '/webhooks/whatsapp', body, { 'x-hub-signature-256': 'sha256=bad' })).status, 401);
-  const ok = await post(app, '/webhooks/whatsapp', body, { 'x-hub-signature-256': signMeta(body, SECRETS.whatsappAppSecret) });
+  const body = waBody('wamid.T1', 'Oi, quanto custa o curso de harmonização?', { source_id: 'AD-120', source_type: 'ad', ctwa_clid: 'CLID-1' });
+  assert.equal((await post(app, '/webhooks/whatsapp/meta', body, { 'x-hub-signature-256': 'sha256=bad' })).status, 401);
+  const ok = await post(app, '/webhooks/whatsapp/meta', body, { 'x-hub-signature-256': signMeta(body, SECRETS.whatsappAppSecret) });
   assert.deepEqual(await ok.json(), { received: 1, duplicates: 0 });
+  // /webhooks/whatsapp stays as the short form of the Meta webhook.
   const again = await post(app, '/webhooks/whatsapp', body, { 'x-hub-signature-256': signMeta(body, SECRETS.whatsappAppSecret) });
   assert.deepEqual(await again.json(), { received: 1, duplicates: 1 });
   assert.equal((getDb().prepare("SELECT COUNT(*) AS n FROM queue_items WHERE kind = 'routing'").get() as { n: number }).n, 1);
+  const fields = JSON.parse((getDb().prepare("SELECT fields FROM touches WHERE source = 'whatsapp'").get() as { fields: string }).fields);
+  assert.deepEqual(fields.channel, { value: 'meta_ads', level: 'observed', reader: 'referral', evidence: 'ad:AD-120' });
 });
 
 test('the log never stores the message text, the phone or the name', async () => {
   const { app, getDb } = fresh();
   const body = waBody('wamid.T2', 'Meu nome é segredo, vi no insta');
   await post(app, '/webhooks/whatsapp', body, { 'x-hub-signature-256': signMeta(body, SECRETS.whatsappAppSecret) });
-  const log = (getDb().prepare('SELECT payload FROM events').all() as { payload: string }[]).map((r) => r.payload).join('\n');
+  const log = (getDb().prepare("SELECT external_id || ' ' || payload AS t FROM events").all() as { t: string }[]).map((r) => r.t).join('\n');
   for (const secret of ['segredo', '977770003', 'Daniel Rocha']) assert.equal(log.includes(secret), false, secret);
 });
 

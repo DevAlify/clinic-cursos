@@ -1,8 +1,11 @@
 import { z } from 'zod';
-import { extractCode } from '../core/codes.ts';
-import type { Db } from '../core/db.ts';
-import { storePii, toIdentifier } from '../core/pii.ts';
-import type { EventInput, Identifier } from '../core/types.ts';
+import { extractCode } from '../../core/codes.ts';
+import type { Db } from '../../core/db.ts';
+import { fetchJson } from '../../core/http.ts';
+import { hashIdentifier, storePii, toIdentifier } from '../../core/pii.ts';
+import type { Fetch, Identifier } from '../../core/types.ts';
+import { verifyMetaSignature } from '../../gateway/signature.ts';
+import type { ParsedMessage, WhatsAppProvider } from './types.ts';
 
 const metaSchema = z.object({
   object: z.literal('whatsapp_business_account'),
@@ -21,13 +24,11 @@ const metaSchema = z.object({
     })),
   })),
 });
-
-export interface ParsedMessage { input: EventInput<'whatsapp_message_received'>; text: string }
+const sentSchema = z.object({ messages: z.array(z.object({ id: z.string() })).min(1) });
 
 const isIdentifier = (i: Identifier | null): i is Identifier => i !== null;
 
-// The text stays in memory for the AI; the log keeps only the code and the identifiers.
-export function parseWhatsAppWebhook(db: Db, body: unknown): ParsedMessage[] {
+function parseMeta(db: Db, body: unknown): ParsedMessage[] {
   const parsed = metaSchema.safeParse(body);
   if (!parsed.success) return [];
   const out: ParsedMessage[] = [];
@@ -48,17 +49,43 @@ export function parseWhatsAppWebhook(db: Db, body: unknown): ParsedMessage[] {
       out.push({
         text: m.text.body,
         input: {
-          source: 'whatsapp', externalId: m.id, type: 'whatsapp_message_received',
+          // The wamid encodes the sender's number, so the log keeps a keyed hash of it.
+          source: 'whatsapp', externalId: hashIdentifier('wa_message', m.id), type: 'whatsapp_message_received',
           occurredAt: sentAt.toISOString(), actor: 'system',
           payload: {
             businessNumber: v.metadata.display_phone_number, identifiers,
             displayRef: contact?.profile?.name ? storePii(db, 'name', contact.profile.name) : null,
             code: extractCode(m.text.body),
             referral: m.referral ? { sourceId: m.referral.source_id, sourceType: m.referral.source_type, ctwaClid: m.referral.ctwa_clid ?? null } : null,
+            textRef: storePii(db, 'message', m.text.body),
+            provider: 'meta',
           },
         },
       });
     }
   }
   return out;
+}
+
+export interface MetaOptions { appSecret: string; accessToken: string; phoneNumberId: string; fetch: Fetch }
+
+// Meta Cloud API: the default for the real operation (official, brings the ad referral and the BSUID).
+export function createMetaProvider(o: MetaOptions): WhatsAppProvider {
+  return {
+    name: 'meta',
+    verify: (rawBody, headers) => verifyMetaSignature(rawBody, headers['x-hub-signature-256'], o.appSecret),
+    parse: (db, body) => parseMeta(db, body),
+    async sendText(to, text) {
+      // Without credentials the core runs offline: the reply is recorded, not delivered.
+      if (!o.accessToken || !o.phoneNumberId) return { externalId: null };
+      // ponytail: one phone_number_id sends for every business number; map number -> id when several go live on Meta.
+      const body = await fetchJson(o.fetch, `https://graph.facebook.com/v26.0/${o.phoneNumberId}/messages`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${o.accessToken}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to, type: 'text', text: { body: text } }),
+      }, 'Meta', 'ao enviar a mensagem');
+      const sent = sentSchema.safeParse(body);
+      return { externalId: sent.success ? sent.data.messages[0].id : null };
+    },
+  };
 }

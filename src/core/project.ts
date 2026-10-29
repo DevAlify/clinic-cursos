@@ -47,6 +47,31 @@ export function project(db: Db, e: AnyEvent, rules: Rules): void {
         if (link && isCatalogProduct(link.product)) ensureOpportunity(db, e, personId, link.product, link.unit, rules);
       }
       recomputeAttributions(db, personId, rules);
+      insertMessage(db, e, personId, p.businessNumber, 'in', 'person', p.textRef, null);
+      return;
+    }
+    case 'whatsapp_message_sent': {
+      const p = e.payload;
+      insertMessage(db, e, p.personId, p.businessNumber, 'out', e.actor, p.textRef, JSON.stringify(p.basedOn));
+      return;
+    }
+    case 'conversation_mode_changed': {
+      const p = e.payload;
+      const r = db.prepare('UPDATE conversations SET mode = ? WHERE person_id = ? AND business_number = ?').run(p.mode, p.personId, p.businessNumber);
+      if (r.changes === 0) throw new Error(`conversa ${p.personId} · ${p.businessNumber} não existe`);
+      return;
+    }
+    case 'opportunity_stage_changed': {
+      const p = e.payload;
+      // A lost opportunity leaves the "one open per person, product and unit" slot free for a new interest.
+      const r = db.prepare("UPDATE opportunities SET stage = ?, status = CASE WHEN ? = 'lost' THEN 'lost' ELSE status END WHERE id = ?").run(p.stage, p.stage, p.opportunityId);
+      if (r.changes === 0) throw new Error(`oportunidade ${p.opportunityId} não existe`);
+      return;
+    }
+    case 'erp_order_created': {
+      const p = e.payload;
+      const r = db.prepare("UPDATE opportunities SET erp_order_id = ?, stage = 'pre_enrollment' WHERE id = ?").run(p.orderId, p.opportunityId);
+      if (r.changes === 0) throw new Error(`oportunidade ${p.opportunityId} não existe`);
       return;
     }
     case 'erp_person_imported': {
@@ -62,7 +87,7 @@ export function project(db: Db, e: AnyEvent, rules: Rules): void {
       ensureRole(db, personId, 'student', p.unit, e.seq);
       const opp = p.opportunityId ? getOpportunity(db, p.opportunityId) : null;
       if (opp) {
-        db.prepare("UPDATE opportunities SET status = 'won', erp_sale_id = ? WHERE id = ?").run(p.saleId, opp.id);
+        db.prepare("UPDATE opportunities SET status = 'won', stage = 'won', erp_sale_id = ? WHERE id = ?").run(p.saleId, opp.id);
       } else {
         const suggestion = findOpenOpportunity(db, personId, p.product, p.unit)?.id ?? null;
         enqueue(db, e, 'reconciliation', 'reconciliation', personId, 'Venda do ERP sem oportunidade ligada', { saleId: p.saleId, product: p.product, unit: p.unit, suggestion });
@@ -72,6 +97,8 @@ export function project(db: Db, e: AnyEvent, rules: Rules): void {
     case 'conversation_routed': {
       const p = e.payload;
       enqueue(db, e, 'routing', p.queue, p.personId, p.reason, { intent: p.intent, confidence: p.confidence, model: p.model, summary: p.summary, messageSeq: p.messageSeq });
+      db.prepare('UPDATE conversations SET queue = ? WHERE person_id = ? AND business_number = (SELECT business_number FROM messages WHERE seq = ?)')
+        .run(p.queue, p.personId, p.messageSeq);
       return;
     }
     case 'origin_declared': {
@@ -122,6 +149,14 @@ function person(db: Db, e: AnyEvent, identifiers: Identifier[], displayRef: stri
 function insertTouch(db: Db, e: AnyEvent, personId: string, source: string, fields: Fields, code: string | null, isTest: boolean): void {
   db.prepare('INSERT INTO touches (seq, person_id, occurred_at, source, fields, code, is_test) VALUES (?, ?, ?, ?, ?, ?, ?)')
     .run(e.seq, personId, e.occurredAt, source, JSON.stringify(fields), code, isTest ? 1 : 0);
+}
+
+// One row per message received or sent; the conversation follows the latest one. Text stays in the vault.
+function insertMessage(db: Db, e: AnyEvent, personId: string, businessNumber: string, direction: 'in' | 'out', actor: string, textRef: string | null, basedOn: string | null): void {
+  db.prepare('INSERT INTO messages (seq, person_id, business_number, direction, actor, text_ref, at, based_on) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(e.seq, personId, businessNumber, direction, actor, textRef, e.occurredAt, basedOn);
+  db.prepare(`INSERT INTO conversations (person_id, business_number, last_at) VALUES (?, ?, ?)
+    ON CONFLICT (person_id, business_number) DO UPDATE SET last_at = MAX(last_at, excluded.last_at)`).run(personId, businessNumber, e.occurredAt);
 }
 
 function ensureRole(db: Db, personId: string, role: string, unit: string, seq: number): void {

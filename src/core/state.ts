@@ -2,15 +2,18 @@ import type { Db } from './db.ts';
 import { listEvents } from './log.ts';
 import { readPii } from './pii.ts';
 import {
-  allEntryPoints, allLinks, allOpportunities, allTouches, getTouch, touchesOfEntryPoint,
-  type EntryPointRow, type LinkRow, type OpportunityRow, type TouchRow,
+  allConversations, allEntryPoints, allLinks, allMessages, allOpportunities, allTouches, getConversation, getTouch, messagesOf,
+  originOf, touchesOfEntryPoint,
+  type ConversationRow, type EntryPointRow, type LinkRow, type MessageRow, type OpportunityRow, type TouchRow,
 } from './queries.ts';
-import type { AnyEvent, Level, Rules } from './types.ts';
+import type { AnyEvent, Fields, Level, Rules } from './types.ts';
 
 export interface PersonView { id: string; name: string | null; roles: { role: string; unit: string }[]; identifierKinds: string[] }
 export interface QueueView {
   id: number; kind: string; queue: string; personId: string | null; reason: string; details: Record<string, unknown>; status: string; createdSeq: number;
 }
+// Messages without the text: the text only leaves the vault through the conversation route.
+export type MessageView = Omit<MessageRow, 'textRef'>;
 export interface EventView { seq: number; type: string; occurredAt: string; actor: string; source: string; label: string }
 export interface AlertView { id: number; entryPoint: string; kind: string; message: string; action: string; owner: string; createdSeq: number }
 export type LevelMix = { total: number } & Record<Level, number>;
@@ -25,6 +28,7 @@ export interface State {
   queue: QueueView[]; alerts: AlertView[]; entryPoints: EntryPointRow[]; links: LinkRow[];
   scans: { code: string; count: number }[]; duplicates: { source: string; externalId: string; count: number }[];
   quarantine: { seq: number; error: string }[]; coverage: Coverage;
+  conversations: ConversationRow[]; messages: MessageView[];
 }
 
 export function describeEvent(e: AnyEvent): string {
@@ -42,6 +46,10 @@ export function describeEvent(e: AnyEvent): string {
     case 'interest_declared': return `Interesse: ${e.payload.product} · ${e.payload.unit}`;
     case 'merge_proposed': return 'Fusão de fichas proposta';
     case 'alert_raised': return `Alerta em ${e.payload.entryPoint}`;
+    case 'whatsapp_message_sent': return `WhatsApp enviado por ${e.payload.businessNumber}${e.payload.basedOn.length ? ` com dado de ${e.payload.basedOn.map((b) => b.tool).join(', ')}` : ''}`;
+    case 'conversation_mode_changed': return `Conversa em modo ${e.payload.mode === 'human' ? 'humano' : 'IA'}: ${e.payload.reason}`;
+    case 'opportunity_stage_changed': return `Oportunidade ${e.payload.opportunityId}: etapa ${e.payload.stage}`;
+    case 'erp_order_created': return `Pedido ${e.payload.orderId} criado no ERP para ${e.payload.opportunityId}`;
   }
 }
 
@@ -70,13 +78,16 @@ export function getCoverage(db: Db): Coverage {
   return { byUnit, byChannel, byCampaign, byEntryPoint };
 }
 
+const personView = (db: Db, p: { id: string; display_ref: string | null }): PersonView => ({
+  id: p.id,
+  name: readPii(db, p.display_ref),
+  roles: db.prepare('SELECT role, unit FROM roles WHERE person_id = ? ORDER BY source_seq, role').all(p.id) as { role: string; unit: string }[],
+  identifierKinds: (db.prepare('SELECT kind FROM identifiers WHERE person_id = ? ORDER BY kind').all(p.id) as { kind: string }[]).map((r) => r.kind),
+});
+const withoutText = ({ textRef: _, ...m }: MessageRow): MessageView => m;
+
 export function getState(db: Db, rules: Rules): State {
-  const people = (db.prepare('SELECT id, display_ref FROM people ORDER BY created_seq').all() as { id: string; display_ref: string | null }[]).map((p) => ({
-    id: p.id,
-    name: readPii(db, p.display_ref),
-    roles: db.prepare('SELECT role, unit FROM roles WHERE person_id = ? ORDER BY source_seq, role').all(p.id) as { role: string; unit: string }[],
-    identifierKinds: (db.prepare('SELECT kind FROM identifiers WHERE person_id = ? ORDER BY kind').all(p.id) as { kind: string }[]).map((r) => r.kind),
-  }));
+  const people = (db.prepare('SELECT id, display_ref FROM people ORDER BY created_seq').all() as { id: string; display_ref: string | null }[]).map((p) => personView(db, p));
   const queue = (db.prepare('SELECT * FROM queue_items ORDER BY id').all() as {
     id: number; kind: string; queue: string; person_id: string | null; reason: string; details: string; status: string; created_seq: number;
   }[]).map((q) => ({ id: q.id, kind: q.kind, queue: q.queue, personId: q.person_id, reason: q.reason, details: JSON.parse(q.details), status: q.status, createdSeq: q.created_seq }));
@@ -94,5 +105,38 @@ export function getState(db: Db, rules: Rules): State {
     duplicates: db.prepare('SELECT source, external_id AS externalId, count FROM inbound_duplicates ORDER BY source, external_id').all() as { source: string; externalId: string; count: number }[],
     quarantine: db.prepare('SELECT seq, error FROM quarantine ORDER BY seq').all() as { seq: number; error: string }[],
     coverage: getCoverage(db),
+    conversations: allConversations(db),
+    messages: allMessages(db).map(withoutText),
+  };
+}
+
+const personRow = (db: Db, id: string) => db.prepare('SELECT id, display_ref FROM people WHERE id = ?').get(id) as { id: string; display_ref: string | null } | undefined;
+
+export interface ConversationSummary extends ConversationRow {
+  name: string | null; origin: Fields | null; lastMessage: Omit<MessageView, 'personId' | 'businessNumber'> | null;
+}
+
+// Inbox list: no message text here either.
+export function listConversations(db: Db): ConversationSummary[] {
+  return allConversations(db).map((c) => {
+    const last = messagesOf(db, c.personId, c.businessNumber).at(-1);
+    const p = personRow(db, c.personId);
+    return {
+      ...c, name: p ? readPii(db, p.display_ref) : null, origin: originOf(db, c.personId),
+      lastMessage: last ? { seq: last.seq, direction: last.direction, actor: last.actor, at: last.at, basedOn: last.basedOn } : null,
+    };
+  });
+}
+
+// The only place where message text leaves the vault: one conversation, opened by the attendant.
+export function getConversationDetail(db: Db, personId: string, businessNumber: string) {
+  const conversation = getConversation(db, personId, businessNumber);
+  const p = personRow(db, personId);
+  if (!conversation || !p) return null;
+  return {
+    conversation,
+    person: { ...personView(db, p), origin: originOf(db, personId) },
+    messages: messagesOf(db, personId, businessNumber).map(({ textRef, ...m }) => ({ ...m, text: readPii(db, textRef) })),
+    opportunities: allOpportunities(db).filter((o) => o.personId === personId),
   };
 }

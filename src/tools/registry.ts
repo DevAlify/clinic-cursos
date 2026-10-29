@@ -6,8 +6,8 @@ import { ENTRY_POINT_STATUSES, UNITS, type EventType, type Payload } from '../co
 import { maxSeq } from '../core/log.ts';
 import { findOpenOpportunity, getEntryPoint, getOpportunity, getTouch } from '../core/queries.ts';
 import { getCoverage } from '../core/state.ts';
-import type { AnyEventInput, Rules } from '../core/types.ts';
-import { findOffer } from '../erp/catalog.ts';
+import type { AnyEventInput, Fetch, Rules } from '../core/types.ts';
+import { getOffer } from '../erp/client.ts';
 
 export type Role = 'attendant' | 'ai' | 'marketing' | 'owner' | 'monitor' | 'manager';
 const ROLES: Role[] = ['attendant', 'ai', 'marketing', 'owner', 'monitor', 'manager'];
@@ -17,7 +17,7 @@ export function roleOf(actor: string): Role | null {
   return ROLES.includes(role) ? role : null;
 }
 
-interface ToolContext { db: Db; actor: string; rules: Rules; now: string }
+export interface ToolContext { db: Db; actor: string; rules: Rules; now: string; fetch: Fetch }
 interface ToolDef {
   description: string;
   kind: 'read' | 'action';
@@ -27,10 +27,11 @@ interface ToolDef {
   run(ctx: ToolContext, input: never): unknown;
 }
 export type ToolResult = { ok: true; result: unknown } | { ok: false; error: string };
+export const OFFER_NOT_FOUND = 'oferta não encontrada no ERP';
 
 // Every action is an event in the log, keyed by what triggered it: repeating it changes nothing.
 // If the projection fails the event stays in the log (quarantined), but the caller must learn the action failed.
-function act<T extends EventType>(ctx: ToolContext, type: T, key: string, payload: Payload<T>) {
+export function act<T extends EventType>(ctx: ToolContext, type: T, key: string, payload: Payload<T>) {
   const r = appendAndProject(ctx.db, { source: 'tool', externalId: key, type, occurredAt: ctx.now, actor: ctx.actor, payload } as AnyEventInput, ctx.rules);
   if (r.error !== null) throw new Error(`a ação ${type} foi gravada no log, mas a projeção falhou: ${r.error}`);
   return { recorded: !r.duplicate, seq: r.event?.seq ?? null };
@@ -61,9 +62,9 @@ export const tools: Record<string, ToolDef> = {
     description: 'Curso, preço e vagas lidos do ERP, com data e hora da leitura.',
     kind: 'read', roles: ['attendant', 'ai', 'manager'], approval: 'none',
     input: z.object({ product: z.string(), unit }),
-    run: ({ now }, { product, unit: u }: { product: string; unit: string }) => {
-      const offer = findOffer(product, u);
-      if (!offer) throw new Error('oferta não encontrada no ERP');
+    run: async ({ now, fetch }, { product, unit: u }: { product: string; unit: string }) => {
+      const offer = await getOffer(product, u, { fetch });
+      if (!offer) throw new Error(OFFER_NOT_FOUND);
       return { ...offer, source: 'erp-simulado', readAt: now };
     },
   },
@@ -119,7 +120,9 @@ export const tools: Record<string, ToolDef> = {
   },
 };
 
-export function callTool(db: Db, name: string, rawInput: unknown, actor: string, rules: Rules = DEFAULT_RULES, now = new Date().toISOString()): ToolResult {
+export async function callTool(
+  db: Db, name: string, rawInput: unknown, actor: string, rules: Rules = DEFAULT_RULES, now = new Date().toISOString(), fetchImpl: Fetch = fetch,
+): Promise<ToolResult> {
   const tool = Object.hasOwn(tools, name) ? tools[name] : undefined;
   if (!tool) return { ok: false, error: `ferramenta desconhecida: ${name}` };
   const role = roleOf(actor);
@@ -127,7 +130,7 @@ export function callTool(db: Db, name: string, rawInput: unknown, actor: string,
   const parsed = tool.input.safeParse(rawInput ?? {});
   if (!parsed.success) return { ok: false, error: `entrada inválida: ${parsed.error.issues.map((i) => `${i.path.join('.')} ${i.message}`).join('; ')}` };
   try {
-    return { ok: true, result: tool.run({ db, actor, rules, now }, parsed.data as never) };
+    return { ok: true, result: await tool.run({ db, actor, rules, now, fetch: fetchImpl }, parsed.data as never) };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }

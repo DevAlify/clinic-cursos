@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS inbound_duplicates (
 
 const PROJECTION_TABLES = [
   'people', 'identifiers', 'roles', 'touches', 'opportunities', 'queue_items',
-  'entry_points', 'links', 'scans', 'alerts', 'quarantine',
+  'entry_points', 'links', 'scans', 'alerts', 'quarantine', 'conversations', 'messages',
 ];
 
 const PROJECTION_SQL = `
@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS touches (
 CREATE TABLE IF NOT EXISTS opportunities (
   id TEXT PRIMARY KEY, person_id TEXT NOT NULL, product TEXT NOT NULL, unit TEXT NOT NULL, status TEXT NOT NULL,
   opened_seq INTEGER NOT NULL, opened_at TEXT NOT NULL, first_touch_seq INTEGER, last_touch_seq INTEGER,
-  attribution_rule TEXT NOT NULL, erp_sale_id TEXT
+  attribution_rule TEXT NOT NULL, erp_sale_id TEXT, stage TEXT NOT NULL DEFAULT 'new', erp_order_id TEXT
 );
 CREATE UNIQUE INDEX IF NOT EXISTS one_open_opportunity ON opportunities (person_id, product, unit) WHERE status = 'open';
 CREATE TABLE IF NOT EXISTS queue_items (
@@ -67,7 +67,16 @@ CREATE TABLE IF NOT EXISTS alerts (
   id INTEGER PRIMARY KEY AUTOINCREMENT, entry_point TEXT NOT NULL, kind TEXT NOT NULL, message TEXT NOT NULL,
   action TEXT NOT NULL, owner TEXT NOT NULL, created_seq INTEGER NOT NULL
 );
-CREATE TABLE IF NOT EXISTS quarantine (seq INTEGER PRIMARY KEY, error TEXT NOT NULL);`;
+CREATE TABLE IF NOT EXISTS quarantine (seq INTEGER PRIMARY KEY, error TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS conversations (
+  person_id TEXT NOT NULL, business_number TEXT NOT NULL, mode TEXT NOT NULL DEFAULT 'ai', queue TEXT,
+  origin_asked INTEGER NOT NULL DEFAULT 0, last_at TEXT NOT NULL, PRIMARY KEY (person_id, business_number)
+);
+CREATE TABLE IF NOT EXISTS messages (
+  seq INTEGER PRIMARY KEY, person_id TEXT NOT NULL, business_number TEXT NOT NULL, direction TEXT NOT NULL,
+  actor TEXT NOT NULL, text_ref TEXT, at TEXT NOT NULL, based_on TEXT
+);
+CREATE INDEX IF NOT EXISTS messages_by_conversation ON messages (person_id, business_number, at);`;
 
 export function openDb(path = ':memory:'): Db {
   const db = new Database(path);

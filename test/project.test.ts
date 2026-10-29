@@ -25,7 +25,7 @@ const form = (db: Db, id: string, phone: string, when: string, utm: Record<strin
 });
 const wa = (db: Db, id: string, phone: string, when: string): AnyEventInput => ({
   source: 'whatsapp', externalId: id, type: 'whatsapp_message_received', occurredAt: when, actor: 'system',
-  payload: { businessNumber: '551930000003', identifiers: [toIdentifier(db, 'phone', phone, true)!], displayRef: null, code: null, referral: null },
+  payload: { businessNumber: '551930000003', identifiers: [toIdentifier(db, 'phone', phone, true)!], displayRef: null, code: null, referral: null, textRef: null, provider: 'waha' },
 });
 
 test('a form on a product page opens one opportunity attributed to its own touch', () => {

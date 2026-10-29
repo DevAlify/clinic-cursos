@@ -40,51 +40,51 @@ test('there are exactly eight tools', () => {
   ]);
 });
 
-test('tools refuse unknown names, wrong roles and invalid input', () => {
+test('tools refuse unknown names, wrong roles and invalid input', async () => {
   const db = setup();
-  assert.equal(callTool(db, 'nope', {}, 'attendant:joana').ok, false);
-  assert.match(String((callTool(db, 'route_conversation', {}, 'marketing:ana') as { error: string }).error), /permissão negada/);
-  assert.match(String((callTool(db, 'route_conversation', { queue: 1 }, 'ai:simulated-v1') as { error: string }).error), /entrada inválida/);
+  assert.equal((await callTool(db, 'nope', {}, 'attendant:joana')).ok, false);
+  assert.match(String((await callTool(db, 'route_conversation', {}, 'marketing:ana') as { error: string }).error), /permissão negada/);
+  assert.match(String((await callTool(db, 'route_conversation', { queue: 1 }, 'ai:simulated-v1') as { error: string }).error), /entrada inválida/);
 });
 
-test('the same routing action twice creates one queue item', () => {
+test('the same routing action twice creates one queue item', async () => {
   const db = setup();
   const input = { messageSeq: 42, personId: 'P1', queue: 'sales-cps', reason: 'interesse em curso', summary: 'Quer comprar um curso', intent: 'course_purchase', confidence: 0.91, model: 'simulated-v1' };
-  callTool(db, 'route_conversation', input, 'ai:simulated-v1', R, NOW);
-  callTool(db, 'route_conversation', input, 'ai:simulated-v1', R, NOW);
+  await callTool(db, 'route_conversation', input, 'ai:simulated-v1', R, NOW);
+  await callTool(db, 'route_conversation', input, 'ai:simulated-v1', R, NOW);
   assert.equal(getState(db, R).queue.filter((q) => q.kind === 'routing').length, 1);
 });
 
-test('the monitor can only pause, and release needs a passing test lead after the alert', () => {
+test('the monitor can only pause, and release needs a passing test lead after the alert', async () => {
   const db = setup();
-  assert.equal(callTool(db, 'set_entry_point_status', { code: 'cps-lp-hof-01', status: 'released', reason: 'x' }, 'monitor', R, NOW).ok, false);
+  assert.equal((await callTool(db, 'set_entry_point_status', { code: 'cps-lp-hof-01', status: 'released', reason: 'x' }, 'monitor', R, NOW)).ok, false);
   appendAndProject(db, { source: 'monitor', externalId: 'a1', type: 'alert_raised', occurredAt: NOW, actor: 'monitor', payload: { entryPoint: 'cps-lp-hof-01', kind: 'campaign_coverage_drop', message: 'm', action: 'a', owner: 'marketing' } }, R);
-  assert.equal(callTool(db, 'set_entry_point_status', { code: 'cps-lp-hof-01', status: 'auditing', reason: 'queda' }, 'monitor', R, NOW).ok, true);
-  const blocked = callTool(db, 'set_entry_point_status', { code: 'cps-lp-hof-01', status: 'released', reason: 'ok' }, 'owner:marketing', R, NOW);
+  assert.equal((await callTool(db, 'set_entry_point_status', { code: 'cps-lp-hof-01', status: 'auditing', reason: 'queda' }, 'monitor', R, NOW)).ok, true);
+  const blocked = await callTool(db, 'set_entry_point_status', { code: 'cps-lp-hof-01', status: 'released', reason: 'ok' }, 'owner:marketing', R, NOW);
   assert.match(String((blocked as { error: string }).error), /lead de teste/);
   appendAndProject(db, { source: 'form', externalId: 'test-1', type: 'form_submitted', occurredAt: NOW, actor: 'system', payload: { entryPoint: 'cps-lp-hof-01', identifiers: [toIdentifier(db, 'email', 'teste@example.com')!], displayRef: null, utm: { campaign: 'cps_hof_captacao_202610' }, clickIds: {}, test: true } }, R);
-  assert.equal(callTool(db, 'set_entry_point_status', { code: 'cps-lp-hof-01', status: 'released', reason: 'ok' }, 'owner:marketing', R, NOW).ok, true);
+  assert.equal((await callTool(db, 'set_entry_point_status', { code: 'cps-lp-hof-01', status: 'released', reason: 'ok' }, 'owner:marketing', R, NOW)).ok, true);
 });
 
-test('course offers come from the ERP with source and time', () => {
-  const r = callTool(setup(), 'get_course_offer', { product: 'hof', unit: 'cps' }, 'ai:simulated-v1', R, NOW);
+test('course offers come from the ERP with source and time', async () => {
+  const r = await callTool(setup(), 'get_course_offer', { product: 'hof', unit: 'cps' }, 'ai:simulated-v1', R, NOW);
   assert.equal(r.ok, true);
   const offer = (r as { result: { source: string; readAt: string; seatsLeft: number } }).result;
   assert.deepEqual([offer.source, offer.readAt, offer.seatsLeft], ['erp-simulado', NOW, 2]);
 });
 
-test('an action whose projection fails is reported as failed, and the event stays in the log', () => {
+test('an action whose projection fails is reported as failed, and the event stays in the log', async () => {
   const db = setup();
   db.exec('DROP TABLE queue_items');
   const before = maxSeq(db);
-  const r = callTool(db, 'route_conversation', { messageSeq: 7, personId: 'P1', queue: 'sales-cps', reason: 'r', summary: 's', intent: 'course_purchase', confidence: 0.91, model: 'simulated-v1' }, 'ai:simulated-v1', R, NOW);
+  const r = await callTool(db, 'route_conversation', { messageSeq: 7, personId: 'P1', queue: 'sales-cps', reason: 'r', summary: 's', intent: 'course_purchase', confidence: 0.91, model: 'simulated-v1' }, 'ai:simulated-v1', R, NOW);
   assert.equal(r.ok, false);
   assert.match((r as { error: string }).error, /queue_items/);
   assert.equal(maxSeq(db), before + 1);
   assert.equal((db.prepare('SELECT COUNT(*) AS n FROM quarantine').get() as { n: number }).n, 1);
 });
 
-test('declaring an origin on a touch that is not the person\'s is rejected before any event is written', () => {
+test('declaring an origin on a touch that is not the person\'s is rejected before any event is written', async () => {
   const db = setup();
   const lead = (id: string, phone: string) => appendAndProject(db, { source: 'form', externalId: id, type: 'form_submitted', occurredAt: NOW, actor: 'system', payload: { entryPoint: 'cps-lp-hof-01', identifiers: [toIdentifier(db, 'phone', phone)!], displayRef: null, utm: {}, clickIds: {}, test: false } }, R).event!;
   const a = lead('fa', '(19) 93333-0001');
@@ -93,11 +93,11 @@ test('declaring an origin on a touch that is not the person\'s is rejected befor
   const declare = (touchSeq: number) => callTool(db, 'record_declared_origin', { personId: personA, touchSeq, value: 'instagram', quote: 'Vi no insta', confidence: 0.93, triggerSeq: 99 }, 'ai:simulated-v1', R, NOW);
   const before = maxSeq(db);
   for (const seq of [b.seq, 999]) {
-    const r = declare(seq);
+    const r = await declare(seq);
     assert.equal(r.ok, false);
     assert.equal((r as { error: string }).error, `o contato ${seq} não pertence à pessoa ${personA}`);
   }
   assert.equal(maxSeq(db), before);
-  assert.equal(declare(a.seq).ok, true);
+  assert.equal((await declare(a.seq)).ok, true);
   assert.equal(getTouch(db, a.seq)?.fields.channel.level, 'declared');
 });
