@@ -28,7 +28,8 @@ export function findPerson(db: Db, identifiers: { kind: string; hash: string }[]
 
 // Exact matches only. On conflict, the strongest identifier wins and the other person is reported for review.
 export function resolvePerson(db: Db, identifiers: Identifier[], seq: number, displayRef: string | null): Resolution {
-  const found = [...identifiers]
+  const unique = new Map(identifiers.map((identifier) => [`${identifier.kind}:${identifier.hash}`, identifier]));
+  const found = [...unique.values()]
     .sort((a, b) => rank(a.kind) - rank(b.kind))
     .map((identifier) => ({ identifier, owner: ownerOf(db, identifier.kind, identifier.hash) }));
   const owners = [...new Set(found.flatMap((f) => (f.owner ? [f.owner] : [])))];

@@ -13,6 +13,15 @@ test('phones become E.164 and old mobile numbers get the ninth digit', () => {
   assert.equal(normalizePhone('123', false), null);
 });
 
+for (const [raw, expected] of [
+  ['+34 912 345 678', '+34912345678'],
+  ['+1 650 555 1234', '+16505551234'],
+]) {
+  test(`a leading plus preserves the country code in ${raw}`, () => {
+    assert.equal(normalizePhone(raw, false), expected);
+  });
+}
+
 test('emails are trimmed and lower-cased', () => {
   assert.equal(normalizeEmail('  Ana.Lima@Example.com '), 'ana.lima@example.com');
   assert.equal(normalizeEmail('not-an-email'), null);

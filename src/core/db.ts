@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS quarantine (seq INTEGER PRIMARY KEY, error TEXT NOT N
 export function openDb(path = ':memory:'): Db {
   const db = new Database(path);
   db.pragma('journal_mode = WAL');
+  db.pragma('recursive_triggers = ON');
   db.exec(LOG_SQL);
   db.exec(PROJECTION_SQL);
   return db;

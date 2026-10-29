@@ -32,6 +32,16 @@ test('conflicting identifiers keep the strongest match and report the other pers
   assert.equal(findPerson(db, ids(db, [['email', 'outra@example.com']])), 'P2');
 });
 
+test('repeated identifiers create only one person and one identifier', () => {
+  const db = openDb();
+  const identifiers = ids(db, [['phone', '(11) 98765-0001'], ['phone', '(11) 98765-0001']]);
+  assert.deepEqual(resolvePerson(db, identifiers, 7, null),
+    { personId: 'P7', created: true, conflictWith: [] });
+  assert.deepEqual(db.prepare('SELECT COUNT(*) AS n FROM people').get(), { n: 1 });
+  assert.deepEqual(db.prepare('SELECT COUNT(*) AS n FROM identifiers').get(), { n: 1 });
+  assert.equal(findPerson(db, identifiers), 'P7');
+});
+
 test('equal names never join different people', () => {
   const db = openDb();
   const a = resolvePerson(db, ids(db, [['phone', '(11) 90000-1111']]), 1, 'pii_same_name');

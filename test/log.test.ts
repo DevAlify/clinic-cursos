@@ -31,6 +31,26 @@ test('the log rejects update and delete', () => {
   assert.throws(() => db.prepare('DELETE FROM events').run(), /append-only/);
 });
 
+test('the log rejects replacing an existing event', () => {
+  const db = openDb();
+  appendEvent(db, scan('s1'));
+  const before = listEvents(db);
+  assert.throws(() => db.prepare(`INSERT OR REPLACE INTO events
+    (seq, id, source, external_id, type, schema_version, occurred_at, received_at, actor, payload)
+    SELECT seq, id, source, external_id, type, schema_version, occurred_at, received_at, 'x', payload
+    FROM events WHERE seq = ?`).run(before[0].seq), /append-only/);
+  assert.deepEqual(listEvents(db), before);
+});
+
+for (const occurredAt of ['2026-10-29T14:00:00', '2026-10-29', '1']) {
+  test(`non-ISO or timezone-free time ${occurredAt} is refused before storage`, () => {
+    const db = openDb();
+    assert.throws(() => appendEvent(db, { ...scan('s1'), occurredAt }),
+      { message: `data inválida: ${occurredAt}` });
+    assert.deepEqual(listEvents(db), []);
+  });
+}
+
 test('invalid payloads are refused before storage', () => {
   const db = openDb();
   assert.throws(() => appendEvent(db, { ...scan('s1'), payload: {} as never }));

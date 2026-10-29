@@ -5,8 +5,9 @@ import type { Identifier, IdentifierKind } from './types.ts';
 
 // Brazilian mobiles: an 8-digit local number starting with 6-9 is the old format and gets the leading 9.
 export function normalizePhone(raw: string, hasCountryCode: boolean): string | null {
+  const intl = hasCountryCode || raw.trim().startsWith('+');
   let digits = raw.replace(/\D/g, '');
-  if (!hasCountryCode && (digits.length === 10 || digits.length === 11)) digits = `55${digits}`;
+  if (!intl && (digits.length === 10 || digits.length === 11)) digits = `55${digits}`;
   if (!digits.startsWith('55')) return digits.length >= 8 && digits.length <= 15 ? `+${digits}` : null;
   const rest = digits.slice(2);
   if (rest.length !== 10 && rest.length !== 11) return null;
