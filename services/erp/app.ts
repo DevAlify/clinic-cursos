@@ -22,7 +22,8 @@ const orderSchema = z.object({
   opportunityId: z.string().min(1).max(100),
   product: z.string(),
   unit: z.string(),
-  contact: z.object({ name: z.string().max(200).optional(), phone: z.string().max(40).optional(), email: z.string().max(200).optional() })
+  // The core sends null for what it does not know (see Contact in src/erp/client.ts).
+  contact: z.object({ name: z.string().max(200).nullish(), phone: z.string().max(40).nullish(), email: z.string().max(200).nullish() })
     .refine((c) => Boolean(c.phone || c.email), 'informe telefone ou e-mail'),
 });
 
@@ -48,7 +49,8 @@ CREATE TABLE IF NOT EXISTS orders (
   status TEXT NOT NULL DEFAULT 'pending_payment',
   created_at TEXT NOT NULL, paid_at TEXT, sale_id TEXT,
   notified INTEGER NOT NULL DEFAULT 0
-);`;
+);
+CREATE UNIQUE INDEX IF NOT EXISTS orders_opportunity ON orders (opportunity_id);`;
 
 export function createErpApp({ notifyCore, db = new Database(':memory:') }: ErpDeps) {
   const { token } = erpEnv();
@@ -82,6 +84,9 @@ export function createErpApp({ notifyCore, db = new Database(':memory:') }: ErpD
     const parsed = orderSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: 'pedido inválido', details: parsed.error.issues.map((i) => i.message) }, 400);
     const { opportunityId, product, unit, contact } = parsed.data;
+    // One order per opportunity: the core may retry after a crash, and the answer is the order that already exists.
+    const existing = db.prepare('SELECT * FROM orders WHERE opportunity_id = ?').get(opportunityId) as OrderRow | undefined;
+    if (existing) return c.json({ orderId: orderCode(existing.id), status: existing.status }, 200);
     if (!findOffer(product, unit)) return c.json({ error: `curso desconhecido: ${product} em ${unit}` }, 400);
     if (seatsLeft(product, unit) <= 0) return c.json({ error: `sem vagas em ${product} (${unit})` }, 409);
     const r = db.prepare('INSERT INTO orders (opportunity_id, product, unit, name, phone, email, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')

@@ -25,6 +25,20 @@ const digitsOf = (raw: string): string | null => (/^\d{8,15}$/.test(raw) ? raw :
 // WhatsApp treats 55DDXXXXXXXX and 55DD9XXXXXXXX as one account, and the core stores the 9-digit form: the phone key does the same.
 const phoneKey = (digits: string): string => (/^55\d{2}[6-9]\d{7}$/.test(digits) ? `${digits.slice(0, 4)}9${digits.slice(4)}` : digits);
 
+// Fictitious people from the demo scenarios (same numbers), each with the clinic session they usually write to.
+// The page lists them, and their name travels in the envelope like the WhatsApp profile name (_data.notifyName).
+export const PERSONAS = [
+  { name: 'Ana Lima', number: '551187650001', session: 'sp' },
+  { name: 'Carla Mendes', number: '5521988880002', session: 'rj' },
+  { name: 'Daniel Rocha', number: '5519977770003', session: 'cps' },
+  { name: 'Bruna Souza', number: '5519966660004', session: 'cps' },
+  { name: 'Eduardo Alves', number: '5511955550005', session: 'sp' },
+  { name: 'Felipe Costa', number: '5519944440006', session: 'cps' },
+  { name: 'Gabriela Nunes', number: '5519944440007', session: 'cps' },
+  { name: 'Helena Prado', number: '5519944440008', session: 'cps' },
+];
+const personaName = (digits: string): string | undefined => PERSONAS.find((p) => phoneKey(p.number) === phoneKey(digits))?.name;
+
 export function createWahaSimApp({ deliverWebhook, scanQr }: WahaSimDeps) {
   const { apiKey, hmacKey, sessions } = wahaEnv();
   const phones = new Map<string, PhoneMessage[]>();
@@ -40,6 +54,8 @@ export function createWahaSimApp({ deliverWebhook, scanQr }: WahaSimDeps) {
   app.use('/api/*', bodyLimit({ maxSize: 100 * 1024, onError: (c) => c.json({ error: 'corpo grande demais' }, 413) }));
 
   app.get('/', (c) => c.html(page));
+
+  app.get('/api/personas', (c) => c.json(PERSONAS));
 
   // Same shape as WAHA's GET /api/sessions (the part the core and the page use).
   app.get('/api/sessions', (c) => c.json(sessions.map((s) => ({ name: s.name, status: 'WORKING', me: { id: `${s.number}@c.us`, pushName: s.name } }))));
@@ -76,9 +92,10 @@ export function createWahaSimApp({ deliverWebhook, scanQr }: WahaSimDeps) {
     const now = Date.now();
     const messageId = `false_${digits}@c.us_${randomBytes(10).toString('hex').toUpperCase()}`;
     const eventId = `evt_${randomUUID()}`;
+    const notifyName = personaName(digits);
     const raw = JSON.stringify({
       id: eventId, timestamp: now, event: 'message', session,
-      payload: { id: messageId, timestamp: Math.floor(now / 1000), from: `${digits}@c.us`, fromMe: false, to: `${business.number}@c.us`, body, hasMedia: false },
+      payload: { id: messageId, timestamp: Math.floor(now / 1000), from: `${digits}@c.us`, fromMe: false, to: `${business.number}@c.us`, body, hasMedia: false, ...(notifyName ? { _data: { notifyName } } : {}) },
     });
     const headers: Record<string, string> = { 'content-type': 'application/json' };
     if (hmacKey) {

@@ -63,17 +63,8 @@
   </div>
 
   <script>
-    // Fictitious people from the demo scenarios (same numbers), each with the clinic number they usually write to.
-    const PERSONAS = [
-      { name: 'Ana Lima', number: '551187650001', session: 'sp' },
-      { name: 'Carla Mendes', number: '5521988880002', session: 'rj' },
-      { name: 'Daniel Rocha', number: '5519977770003', session: 'cps' },
-      { name: 'Bruna Souza', number: '5519966660004', session: 'cps' },
-      { name: 'Eduardo Alves', number: '5511955550005', session: 'sp' },
-      { name: 'Felipe Costa', number: '5519944440006', session: 'cps' },
-      { name: 'Gabriela Nunes', number: '5519944440007', session: 'cps' },
-      { name: 'Helena Prado', number: '5519944440008', session: 'cps' },
-    ];
+    // The fictitious people come from the simulator (GET /api/personas).
+    let PERSONAS = [];
     const LABEL = { sp: 'São Paulo', rj: 'Rio de Janeiro', cps: 'Campinas' };
     const $ = (id) => document.getElementById(id);
     const personaEl = $('persona'), sessionEl = $('session'), chatEl = $('chat'), textEl = $('text'), statusEl = $('status');
@@ -159,6 +150,11 @@
     }
 
     async function init() {
+      try {
+        PERSONAS = await (await fetch('/api/personas')).json();
+      } catch (e) {
+        setStatus('Não consegui listar as pessoas: ' + e.message, true);
+      }
       for (const p of PERSONAS) personaEl.append(new Option(p.name, p.number));
       try {
         const sessions = await (await fetch('/api/sessions')).json();

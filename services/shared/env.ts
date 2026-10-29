@@ -12,10 +12,13 @@ export function parseSessions(raw: string): Session[] {
   });
 }
 
+// Same rule as src/config.ts: CORE_URL, or localhost on CORE_PORT.
+const coreUrl = () => read('CORE_URL', `http://localhost:${read('CORE_PORT', '3000')}`);
+
 export const erpEnv = () => ({
   port: Number(read('ERP_PORT', '3100')),
   token: read('ERP_TOKEN', 'demo-erp-token'),
-  coreUrl: read('CORE_URL', 'http://localhost:3000'),
+  coreUrl: coreUrl(),
 });
 
 export const wahaEnv = () => ({
@@ -23,5 +26,5 @@ export const wahaEnv = () => ({
   apiKey: read('WAHA_API_KEY', 'demo-waha-key'),
   hmacKey: read('WAHA_WEBHOOK_HMAC_KEY', 'demo-waha-hmac'),
   sessions: parseSessions(read('WAHA_SESSIONS', 'sp:551130000001,rj:552130000002,cps:551930000003')),
-  coreUrl: read('CORE_URL', 'http://localhost:3000'),
+  coreUrl: coreUrl(),
 });

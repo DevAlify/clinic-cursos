@@ -1,7 +1,7 @@
 # Clinic Cursos: rastreamento confiável de origem (demo)
 
 Demo local do desafio Product Builder / FDE da Clinic Cursos: o sistema central em uso. Um log de eventos só de acréscimo guarda tudo o que acontece (formulário, WhatsApp, QR, venda do ERP); pessoa, toques, oportunidades, filas e alertas são calculados a partir dele, e é assim que a origem de cada lead chega inteira até a venda.
-São **três serviços locais que imitam máquinas diferentes da operação** (o sistema central, um ERP e um simulador do WhatsApp), e a sequência do PDF (entrada identificada, contato e oportunidade, atendimento, pré-matrícula no ERP, venda confirmada de volta) passa pelos três. Seis personagens percorrem os cenários, e cada cenário pedido vira uma verificação automática.
+São **três serviços locais que imitam máquinas diferentes da operação** (o sistema central, um ERP e um simulador do WhatsApp), e a sequência do PDF (entrada identificada, contato e oportunidade, atendimento, pré-matrícula no ERP, venda confirmada de volta) passa pelos três. Oito personagens fictícios percorrem os cenários, e cada cenário pedido vira uma verificação automática.
 
 **Todos os dados são fictícios:** nomes inventados, telefones de faixas reservadas, e-mails `@example.com`. Nenhum dado real da Clinic entra aqui.
 
@@ -16,14 +16,14 @@ São **três serviços locais que imitam máquinas diferentes da operação** (o
 
 ```bash
 npm install                       # instala os pacotes (use npm ci para seguir o lockfile à risca)
-npm run verify                    # roda os seis cenários do zero e mostra esperado × obtido
+npm run verify                    # roda os sete cenários do zero e mostra esperado × obtido
 npm run demo                      # constrói o produto e sobe os três serviços (portas 3000, 3100 e 3200)
 npm run replay -- --window 14     # refaz a atribuição com janela de 14 dias e mostra o que mudaria
 docker compose up --build         # plano B, sem Node na máquina; um contêiner por serviço
 ```
 
-- `npm run verify` termina com erro se qualquer verificação falhar.
-- `npm run demo` abre três processos (um por serviço), imprime as três URLs e os encerra juntos com Ctrl+C. Se existir um `.env`, ele é lido (veja "Senhas de demonstração"). Cada vez que o core e o ERP sobem, os bancos (`data/demo.db`, `data/erp.db`) recomeçam do zero com os dados fictícios.
+- `npm run verify` termina com erro se qualquer verificação falhar. Ele (como `test` e `replay`) roda o `core` sozinho, sem rede: o catálogo do ERP é o local, os pedidos saem como `LOCAL-n` e as respostas ficam registradas sem envio. O circuito pelos três serviços de verdade, em três processos falando HTTP, é o `npm run demo`.
+- `npm run demo` abre três processos (um por serviço), imprime as três URLs e os encerra juntos com Ctrl+C. Se existir um `.env`, ele é lido (veja "Senhas de demonstração"); sem `.env`, vale o padrão do `.env.example`. Cada vez que o core e o ERP sobem, os bancos (`data/demo.db`, `data/erp.db`) recomeçam do zero com os dados fictícios.
 - Para subir um serviço só: `npm run start:core`, `npm run start:erp` ou `npm run start:waha`.
 - `npm run replay` roda os cenários num banco em memória e só mostra a prévia; não mexe em `data/demo.db`.
 - `docker compose up --build` usa a imagem `node:26` (a completa, com as ferramentas de compilação), uma só para os três serviços. A primeira construção demora alguns minutos. Para parar: `docker compose down`.
@@ -48,7 +48,7 @@ O caminho de uma venda, do começo ao fim:
 
 ## Provedor de WhatsApp: Meta ou WAHA
 
-O `core` fala com o WhatsApp por uma interface só (conferir a assinatura, ler a mensagem recebida, enviar texto), escolhida por `WHATSAPP_PROVIDER`:
+O `core` fala com o WhatsApp por uma interface só (conferir a assinatura, ler a mensagem recebida, enviar texto), escolhida por `WHATSAPP_PROVIDER`. **Na operação real, o provedor é a Meta**; a demo usa o protocolo do WAHA contra o simulador local:
 
 - **`meta`: o cenário real** (WhatsApp oficial da Meta, a Cloud API). O webhook vem assinado com `X-Hub-Signature-256` (HMAC sha256), traz o anúncio de origem e o id do usuário; o envio é `POST https://graph.facebook.com/v26.0/{META_PHONE_NUMBER_ID}/messages` com token Bearer. Texto livre só dentro da janela de 24 horas.
 - **`waha`: o que a demo usa**, no protocolo do WAHA (alternativa não oficial, auto-hospedada, que automatiza o WhatsApp Web: há risco de bloqueio do número e não vem o dado do anúncio). O webhook é `event: "message"` com `payload.from` no formato `{número}@c.us` e HMAC sha512 em `X-Webhook-Hmac`; o envio é `POST {WAHA_URL}/api/sendText` com `{ session, chatId, text }` e `X-Api-Key`. Uma sessão por número da Clinic (`WAHA_SESSIONS`).
@@ -57,55 +57,66 @@ Na demo, `WHATSAPP_PROVIDER=waha` e `WAHA_URL` aponta para o simulador local (:3
 
 ## Resultado esperado
 
-Saída real de `npm run verify`, colada depois de rodar neste repositório. É a contagem da primeira versão (27 verificações, antes dos serviços); a versão com o circuito atendimento → ERP → CRM acrescenta passos, e a contagem é atualizada na entrega:
+Saída real de `npm run verify`, colada depois de rodar neste repositório com os três serviços integrados:
 
 ```text
 1. Origem preservada até a venda
-  OK     Formulário e WhatsApp da Ana na mesma ficha (nono dígito corrigido)     obtido: 1 ficha(s) · 2 toque(s)
-  OK     A conversa da Ana vai para vendas de SP                                 obtido: sales-sp
+  OK     Formulário e WhatsApp da Ana na mesma ficha (nono dígito corrigido)                  obtido: 1 ficha(s) · 2 toque(s)
+  OK     A conversa da Ana vai para vendas de SP                                              obtido: sales-sp
 
 2. QR de unidade × WhatsApp sem origem
-  OK     Carla entra pelo banner do Rio, lida pelo código K7P2                   obtido: rj-banner-recepcao-01 · code:K7P2 · canal qr (observed)
-  OK     O QR foi lido uma vez                                                   obtido: 1 leitura(s)
-  OK     Carla vai para a fila de vendas do Rio                                  obtido: sales-rj
-  OK     Daniel: canal e campanha desconhecidos, sem chute                       obtido: canal unknown · campanha unknown
-  OK     Daniel vai para vendas de Campinas, com a unidade inferida pelo número  obtido: sales-cps · unidade inferred
-  OK     Daniel declara o Instagram: canal declarado, lido pela IA               obtido: instagram · declared · ai:simulated-v1 · "Vi no insta"
-  OK     A oportunidade do Daniel aponta para o toque declarado                  obtido: instagram (declared) · campanha — (unknown)
+  OK     Carla entra pelo banner do Rio, lida pelo código K7P2                                obtido: rj-banner-recepcao-01 · code:K7P2 · canal qr (observed)
+  OK     O QR foi lido uma vez                                                                obtido: 1 leitura(s)
+  OK     Carla vai para a fila de vendas do Rio                                               obtido: sales-rj
+  OK     Daniel: canal e campanha desconhecidos, sem chute                                    obtido: canal unknown · campanha unknown
+  OK     Daniel vai para vendas de Campinas, com a unidade inferida pelo número               obtido: sales-cps · unidade inferred
+  OK     Daniel declara o Instagram: canal declarado, lido pela IA                            obtido: instagram · declared · ai:simulated-v1 · "Vi no insta"
+  OK     A oportunidade do Daniel aponta para o toque declarado                               obtido: instagram (declared) · campanha — (unknown)
 
 3. Pessoa existente volta por outra campanha
-  OK     Bruna continua uma ficha só: paciente e lead em Campinas                obtido: 1 ficha(s) · lead@cps, patient@cps
-  OK     Novo interesse (hof · cps) com google_ads e campanha observados         obtido: google_ads (observed) · campanha cps_hof_captacao_202610 (observed)
-  OK     O histórico de paciente continua desconhecido, com o lote               obtido: unknown · import:erp-pacientes-2026-09
+  OK     Bruna continua uma ficha só: paciente e lead em Campinas                             obtido: 1 ficha(s) · lead@cps, patient@cps
+  OK     Novo interesse (hof · cps) com google_ads e campanha observados                      obtido: google_ads (observed) · campanha cps_hof_captacao_202610 (observed)
+  OK     O histórico de paciente continua desconhecido, com o lote                            obtido: unknown · import:erp-pacientes-2026-09
 
 4. O mesmo evento chega duas vezes
-  OK     A mensagem repetida não cria outro toque                                obtido: 1 toque(s)
-  OK     A repetição fica contada                                                obtido: 1 repetição(ões)
-  OK     A conversa não é encaminhada duas vezes                                 obtido: 1 encaminhamento(s)
+  OK     A mensagem repetida não cria outro toque                                             obtido: 1 toque(s)
+  OK     A repetição fica contada                                                             obtido: 1 repetição(ões)
+  OK     A conversa não é encaminhada duas vezes                                              obtido: 1 encaminhamento(s)
 
 5. Venda confirmada pelo ERP
-  OK     A venda do Eduardo vai para a fila de conciliação                       obtido: reconciliation · ERP-SALE-0999
-  OK     A oportunidade da Ana fica ganha e ligada ao anúncio da Meta            obtido: won · ERP-SALE-1001 · meta_ads (observed) · campanha sp_hof_captacao_202610 (observed)
+  OK     A venda do Eduardo vai para a fila de conciliação                                    obtido: reconciliation · ERP-SALE-0999
+  OK     O pagamento confirmado deixa a oportunidade da Ana ganha, ligada ao anúncio da Meta  obtido: won · pedido LOCAL-1 · venda ERP-SALE-1001 · meta_ads (observed) · campanha sp_hof_captacao_202610 (observed)
 
 6. Falha: a LP de Campinas perde as UTMs
-  OK     Felipe, Gabriela e Helena: canal observado e campanha desconhecida      obtido: google_ads/unknown · google_ads/unknown · google_ads/unknown
-  OK     Um alerta para cps-lp-hof-01, com ação e responsável                    obtido: LP de harmonização de Campinas parou de enviar a campanha desde as 14h05. 3 leads afetados. Conferir a página publicada. Responsável: marketing.
-  OK     O ponto vai para "em auditoria"                                         obtido: auditing
-  OK     Com o lead de teste aprovado, o dono libera o ponto                     obtido: released
-  OK     Os três leads continuam com a campanha desconhecida                     obtido: unknown · unknown · unknown
+  OK     Felipe, Gabriela e Helena: canal observado e campanha desconhecida                   obtido: google_ads/unknown · google_ads/unknown · google_ads/unknown
+  OK     Um alerta para cps-lp-hof-01, com ação e responsável                                 obtido: LP de harmonização de Campinas parou de enviar a campanha desde as 14h05. 3 leads afetados. Conferir a página publicada. Responsável: marketing.
+  OK     O ponto vai para "em auditoria"                                                      obtido: auditing
+  OK     Com o lead de teste aprovado, o dono libera o ponto                                  obtido: released
+  OK     Os três leads continuam com a campanha desconhecida                                  obtido: unknown · unknown · unknown
+
+7. Atendimento: IA, pessoa e pedido no ERP
+  OK     A IA responde a Ana com 3 vagas e R$ 7.900, citando o ERP                            obtido: Olá, Ana! A turma de Harmonização Facial em São Paulo começa em 14/11, custa R$ 7.900 e tem 3 vagas (consultado no ERP às 14:10). Quer garantir a sua?
+  OK     A IA pergunta ao Daniel como conheceu a Clinic, com opções                           obtido: Olá, Daniel! A turma de Harmonização Facial em Campinas começa em 28/11, custa R$ 7.600 e tem 2 vagas (consultado no ERP às 15:00). Quer garantir a sua? Antes, como você conheceu a Clinic? Instagram, Google, indicação ou outro?
+  OK     O inchaço da Helena vai para a equipe clínica                                        obtido: clinical-team
+  OK     A conversa da Helena passa para uma pessoa                                           obtido: modo human · fila clinical-team
+  OK     A IA só acolhe: nenhuma resposta de mérito nem dado do ERP                           obtido: Olá, Helena! Sinto muito pelo incômodo. Não posso orientar sobre isso por aqui, então já passei sua mensagem para a nossa equipe clínica, que vai falar com você neste número.
+  OK     A atendente assume a conversa da Ana                                                 obtido: modo human
+  OK     A resposta da atendente fica na conversa da Ana                                      obtido: attendant:joana: Oi, Ana! Aqui é a Joana, da Clinic SP. Separei uma vaga para você na turma de 14/11. Posso fazer sua pré-matrícula?
+  OK     A oportunidade da Ana avança para proposta                                           obtido: proposal
+  OK     A pré-matrícula vira pedido no ERP, com o id da oportunidade                         obtido: pre_enrollment · pedido LOCAL-1 · oportunidade O40
 
 Extra: privacidade e log
-  OK     O log não guarda telefone, e-mail nem nome em claro                     obtido: nenhum dado pessoal no log
-  OK     O log recusa alteração                                                  obtido: SqliteError: events are append-only
+  OK     O log não guarda telefone, e-mail, nome nem texto de conversa                        obtido: nenhum dado pessoal no log
+  OK     O log recusa alteração                                                               obtido: SqliteError: events are append-only
 
 Extra: reprocessamento
-  OK     Refazer as projeções a partir do log dá o mesmo estado                  obtido: estado comparado antes e depois
-  OK     Com janela de 14 dias, só a atribuição da Carla muda                    obtido: Carla Mendes: qr → desconhecida
+  OK     Refazer as projeções a partir do log dá o mesmo estado                               obtido: estado comparado antes e depois
+  OK     Com janela de 14 dias, só a atribuição da Carla muda                                 obtido: Carla Mendes: qr → desconhecida
 
 Extra: retorno direto
-  OK     Carla volta direto e a oportunidade (hof · rj) fica com o QR de 10/10   obtido: K7P2 · 2026-10-10 · qr (observed) · campanha rj_cursos_divulgacao_202610 (observed)
+  OK     Carla volta direto e a oportunidade (hof · rj) fica com o QR de 10/10                obtido: K7P2 · 2026-10-10 · qr (observed) · campanha rj_cursos_divulgacao_202610 (observed)
 
-27 de 27 verificações passaram.
+36 de 36 verificações passaram.
 ```
 
 Os termos entre parênteses são os níveis de certeza da origem: `observed` (observada: o sistema viu o dado chegar), `declared` (declarada: a pessoa disse), `inferred` (inferida: deduzida por uma regra) e `unknown` (desconhecida: sem prova, e o sistema não chuta).
@@ -120,22 +131,23 @@ Os termos entre parênteses são os níveis de certeza da origem: `observed` (ob
 | O mesmo evento chega duas vezes | Carla (a mesma mensagem chega de novo) | um toque só, e a repetição fica contada |
 | Venda confirmada pelo ERP | Ana (com o id) e Eduardo (sem ficha correspondente) | a oportunidade da Ana fica ganha; a venda do Eduardo vai para a fila de conciliação |
 | Falha escolhida: a LP de Campinas perde as UTMs | Felipe, Gabriela e Helena | os três leads chegam com canal Google observado e campanha desconhecida; no terceiro, o alerta dispara com ação e responsável, o ponto vai para "em auditoria" e só o dono o libera, depois de um lead de teste |
+| Atendimento: a IA responde com dado do ERP, uma pessoa assume e o pedido vai ao ERP | Ana, Daniel e Helena | a IA responde com vagas e preço do ERP e pergunta a origem de quem não a trouxe; a dúvida clínica da Helena vai para a equipe, sem resposta de mérito; a atendente assume a conversa, avança a etapa e a pré-matrícula vira pedido no ERP com o id da oportunidade |
 
-Além dos seis cenários, `verify` confere três extras: o log não guarda dado pessoal em claro e recusa alteração; refazer as projeções a partir do log dá o mesmo estado; e uma regra nova de atribuição (janela de 14 dias) muda só o que deve mudar.
+Além dos sete cenários, `verify` confere três extras: o log não guarda dado pessoal em claro e recusa alteração; refazer as projeções a partir do log dá o mesmo estado; e uma regra nova de atribuição (janela de 14 dias) muda só o que deve mudar.
 
 ## O que é real e o que é simulado
 
 **Real:**
 - o núcleo: log de eventos só de acréscimo, cofre de dados pessoais, identidade por igualdade exata, origem com nível de certeza, atribuição, monitor de cobertura, reprocessamento e prévia de regra nova;
 - as regras v1: janela de atribuição de 30 dias, limite de confiança da IA de 0,85, e alerta quando os 3 últimos leads de um ponto chegam sem campanha (com base de pelo menos 10 leads em 30 dias e cobertura de base de pelo menos 90%);
-- as oito ferramentas tipadas (`explain_origin`, `origin_coverage`, `get_course_offer`, `route_conversation`, `open_opportunity`, `record_declared_origin`, `propose_merge`, `set_entry_point_status`), que pessoas, simulador e agentes de IA usam pelo mesmo caminho;
-- a porta HTTP (webhooks do WhatsApp, do formulário e do ERP, o redirecionador de QR e links, e a API do produto), com a conferência da assinatura (Meta: sha256; WAHA: sha512) e do token do ERP;
+- as doze ferramentas tipadas (`explain_origin`, `origin_coverage`, `get_course_offer`, `route_conversation`, `open_opportunity`, `record_declared_origin`, `propose_merge`, `set_entry_point_status`, e as do atendente: `reply_to_conversation`, `set_conversation_mode`, `advance_opportunity`, `request_enrollment`), que pessoas, simulador e agentes de IA usam pelo mesmo caminho;
+- a porta HTTP (webhooks do WhatsApp (Meta e WAHA), do formulário e do ERP, o redirecionador de QR e links, e a API do produto), com a conferência da assinatura (Meta: sha256; WAHA: sha512) e do token do ERP;
 - o protocolo entre os serviços: o webhook e a rota de envio do WAHA, e o pedido e o webhook de venda do ERP.
 
 **Simulado:**
 - WhatsApp e ERP: os serviços `waha` e `erp` são simuladores locais, não uma conta da Meta, um WAHA pareado ou um ERP de verdade; o catálogo, os preços e as vagas são fictícios;
 - Hotmart: aparece só no gerador de links;
-- IA: um classificador simulado (`ai:simulated-v1`), no lugar de um modelo de verdade. É em `src/ai/` que se troca o provedor.
+- IA: um classificador e um redator de respostas simulados (`ai:simulated-v1`), no lugar de um modelo de verdade; as respostas citam o que foi consultado no ERP. É em `src/ai/` que se troca o provedor.
 
 ## Dependências
 
@@ -177,7 +189,7 @@ Tudo é configurado por variáveis de ambiente, com os valores padrão de demons
 |---|---|---|
 | `WHATSAPP_PROVIDER` | `waha` | provedor de WhatsApp: `waha` ou `meta` |
 | `CORE_PORT`, `ERP_PORT`, `WAHA_PORT` | `3000`, `3100`, `3200` | portas dos três serviços |
-| `CORE_URL`, `ERP_URL`, `WAHA_URL` | `http://localhost:3000`, `:3100`, `:3200` | como um serviço encontra o outro |
+| `CORE_URL`, `ERP_URL`, `WAHA_URL` | `http://localhost:3000`, `:3100`, `:3200` (no `npm run demo` e no compose) | como um serviço encontra o outro; o `core` sozinho (testes, `verify`) roda com `ERP_URL` e `WAHA_URL` vazios, sem rede |
 | `ERP_TOKEN` | `demo-erp-token` | autentica o ERP (cabeçalho `x-erp-token`), nos dois sentidos |
 | `WAHA_API_KEY` | `demo-waha-key` | chave da rota de envio do WAHA (`X-Api-Key`) |
 | `WAHA_WEBHOOK_HMAC_KEY` | `demo-waha-hmac` | chave do HMAC sha512 do webhook do WAHA |
@@ -192,7 +204,7 @@ A demo roda na sua máquina e deixa algumas portas abertas de propósito, para o
 
 - o cabeçalho `x-occurred-at` deixa o chamador escolher a hora gravada do evento (é como a simulação mantém seu relógio fictício; só aceita data ISO 8601 com fuso);
 - `/tools/*` confia no cabeçalho `x-actor` para saber o papel de quem chama;
-- `/api/reset`, `/api/replay` e `/api/simulate/*` não têm autenticação;
+- `/api/reset`, `/api/replay` e `/api/simulate/*` não têm autenticação, nem `/api/conversations/*`, que devolve o texto das conversas (inclusive uma queixa de saúde fictícia, dado sensível pela LGPD);
 - as páginas e as leituras do ERP e do simulador do WAHA não têm autenticação (só a criação de pedidos do ERP e a rota de envio do WAHA pedem chave), e "Confirmar pagamento" é um botão aberto;
 - o ERP e o celular do lead guardam o estado em memória ou num arquivo que recomeça do zero a cada subida, e `/api/reset` do core não zera o ERP (reinicie a demo para repetir o roteiro);
 - os segredos são os valores padrão de demonstração, lidos de variáveis de ambiente.

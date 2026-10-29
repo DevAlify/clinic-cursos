@@ -15,8 +15,11 @@ function loadEnvFile(path: string): Record<string, string> {
   return out;
 }
 
-const env = { ...loadEnvFile('.env'), ...process.env };
-const port = (name: string, fallback: number) => Number(env[name] ?? fallback);
+const given = { ...loadEnvFile('.env'), ...process.env };
+const port = (name: string, fallback: number) => Number(given[name] ?? fallback);
+// The core runs offline (local catalog, replies not delivered) when ERP_URL and WAHA_URL are empty, which is how tests and verify run.
+// The demo always wires the three services, so these are the defaults when there is no .env; anything given wins.
+const env = { ERP_URL: `http://localhost:${port('ERP_PORT', 3100)}`, WAHA_URL: `http://localhost:${port('WAHA_PORT', 3200)}`, ...given };
 const services = [
   { name: 'core', file: 'src/main.ts', url: `http://localhost:${port('CORE_PORT', 3000)}`, what: 'o sistema central (atendimento, CRM, campanhas, bastidores)' },
   { name: 'erp', file: 'services/erp/main.ts', url: `http://localhost:${port('ERP_PORT', 3100)}`, what: 'o ERP simulado (pedidos e pagamentos)' },

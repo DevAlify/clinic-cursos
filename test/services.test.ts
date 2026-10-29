@@ -1,7 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
+import { openDb } from '../src/core/db.ts';
+import { readPii } from '../src/core/pii.ts';
 import { CATALOG } from '../src/erp/catalog.ts';
+import { createOrder, getOffer } from '../src/erp/client.ts';
+import { createWahaProvider } from '../src/providers/whatsapp/waha.ts';
 import { createErpApp, type SaleConfirmed } from '../services/erp/app.ts';
 import { createWahaSimApp } from '../services/waha/app.ts';
 import { erpEnv, wahaEnv } from '../services/shared/env.ts';
@@ -108,6 +112,7 @@ test('WAHA simulator: a message from the phone becomes a signed WAHA envelope', 
   const business = sessions.find((s) => s.name === 'sp')!.number;
   assert.deepEqual({ ...env.payload, id: 'x', timestamp: 0 }, {
     id: 'x', timestamp: 0, from: '551187650001@c.us', fromMe: false, to: `${business}@c.us`, body: 'Oi! Quero saber da turma', hasMedia: false,
+    _data: { notifyName: 'Ana Lima' },
   });
   assert.ok((env.payload.timestamp as number) < 1e11, 'payload timestamp is in seconds');
 
@@ -130,4 +135,65 @@ test('WAHA simulator: reading a QR returns the message and the business number f
   assert.deepEqual(await (await app.request('/api/qr/K7P2')).json(), { code: 'K7P2', number: rj, session: 'rj', text: 'Olá! Vi o cartaz (cód. K7P2)' });
   assert.equal((await app.request('/api/qr/NOPE')).status, 404);
   assert.equal((await app.request('/api/qr/..%2Fx')).status, 400);
+});
+
+// Interface gaps between the core (Card G) and the services (Card I), closed on integration.
+const erpUrl = 'http://erp.test';
+const wahaUrl = 'http://waha.test';
+const routeTo = (base: string, app: { request: (path: string, init?: RequestInit) => Response | Promise<Response> }): typeof globalThis.fetch =>
+  (async (url: string | URL | Request, init?: RequestInit) => app.request(String(url).replace(base, ''), init)) as typeof globalThis.fetch;
+
+test('ERP: the catalog is what the core client reads, and one opportunity gets one order', async () => {
+  const sent: SaleConfirmed[] = [];
+  const app = createErpApp({ notifyCore: async (sale) => { sent.push(sale); } });
+  const io = { url: erpUrl, token: erpEnv().token, fetch: routeTo(erpUrl, app) };
+
+  assert.deepEqual(await getOffer('hof', 'sp', io), CATALOG.find((c) => c.product === 'hof' && c.unit === 'sp'));
+  assert.equal(await getOffer('hof', 'zz', io), null);
+
+  const request = { opportunityId: 'opp-9', product: 'hof', unit: 'sp', contact: { name: 'Ana Lima', phone: '551187650001', email: null } };
+  const first = await createOrder(request, io);
+  const raw = await app.request('/api/orders', json(request, { 'x-erp-token': erpEnv().token }));
+  assert.equal(raw.status, 200, 'the second POST answers with the existing order, not a new one');
+  assert.deepEqual(await raw.json(), { orderId: first.orderId, status: 'pending_payment' });
+  assert.deepEqual(await createOrder(request, io), first);
+  assert.equal(((await (await app.request('/api/orders')).json()) as unknown[]).length, 1);
+
+  assert.equal((await app.request(`/api/orders/${first.orderId}/pay`, { method: 'POST' })).status, 200);
+  const again = await app.request('/api/orders', json(request, { 'x-erp-token': erpEnv().token }));
+  assert.equal(again.status, 200, 'still the same order after payment');
+  assert.deepEqual(await again.json(), { orderId: first.orderId, status: 'paid' });
+  assert.equal(sent.length, 1);
+});
+
+test('WAHA simulator: the envelope carries the persona name as notifyName, and no _data for an unknown phone', async () => {
+  const bodies: { payload: { _data?: { notifyName?: string } } }[] = [];
+  const app = createWahaSimApp({ deliverWebhook: async (raw) => { bodies.push(JSON.parse(raw)); } });
+  await app.request('/api/phones/551187650001/send', json({ session: 'sp', text: 'oi' }));
+  await app.request('/api/phones/5511987650001/send', json({ session: 'sp', text: 'oi de novo' }));
+  await app.request('/api/phones/5521988880002/send', json({ session: 'rj', text: 'oi' }));
+  await app.request('/api/phones/5511900000000/send', json({ session: 'sp', text: 'oi' }));
+  assert.deepEqual(bodies.map((b) => b.payload._data?.notifyName), ['Ana Lima', 'Ana Lima', 'Carla Mendes', undefined]);
+  assert.ok(!('_data' in bodies[3]!.payload));
+});
+
+test('WAHA simulator: the core reply to the 9-digit number shows on the phone Ana wrote from, and the core parser reads her name', async () => {
+  const delivered: { raw: string; headers: Record<string, string> }[] = [];
+  const app = createWahaSimApp({ deliverWebhook: async (raw, headers) => { delivered.push({ raw, headers }); } });
+  await app.request('/api/phones/551187650001/send', json({ session: 'sp', text: 'Oi! Quero saber da turma' }));
+
+  // The same call the core makes: sendText to the normalized number (with the 9th digit), through its real provider.
+  const provider = createWahaProvider({
+    url: wahaUrl, apiKey: wahaEnv().apiKey, hmacKey: wahaEnv().hmacKey, sessions: 'sp:551130000001,rj:552130000002,cps:551930000003', fetch: routeTo(wahaUrl, app),
+  });
+  assert.ok((await provider.sendText('5511987650001', 'Olá, Ana! A turma tem 3 vagas.', '551130000001')).externalId);
+  const phone = (await (await app.request('/api/phones/551187650001')).json()) as { direction: string; text: string }[];
+  assert.deepEqual(phone.map((m) => [m.direction, m.text]), [['out', 'Oi! Quero saber da turma'], ['in', 'Olá, Ana! A turma tem 3 vagas.']]);
+
+  // The core side of the same envelope: signature accepted, name read from it.
+  const { raw, headers } = delivered[0]!;
+  assert.equal(provider.verify(raw, { 'x-webhook-hmac': headers['X-Webhook-Hmac']! }), true);
+  const db = openDb();
+  const [parsed] = provider.parse(db, JSON.parse(raw), {});
+  assert.equal(readPii(db, (parsed!.input.payload as { displayRef: string | null }).displayRef), 'Ana Lima');
 });
