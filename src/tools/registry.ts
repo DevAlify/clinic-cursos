@@ -2,12 +2,16 @@ import { z } from 'zod';
 import { DEFAULT_RULES } from '../config.ts';
 import { appendAndProject } from '../core/apply.ts';
 import type { Db } from '../core/db.ts';
-import { ENTRY_POINT_STATUSES, UNITS, type EventType, type Payload } from '../core/events.ts';
+import { CONVERSATION_MODES, ENTRY_POINT_STATUSES, STAGES, UNITS, type EventType, type Payload } from '../core/events.ts';
 import { maxSeq } from '../core/log.ts';
-import { findOpenOpportunity, getEntryPoint, getOpportunity, getTouch } from '../core/queries.ts';
+import { hashIdentifier, storePii } from '../core/pii.ts';
+import {
+  contactOf, findOpenOpportunity, getConversation, getEntryPoint, getOpportunity, getTouch, lastInboundProvider,
+} from '../core/queries.ts';
 import { getCoverage } from '../core/state.ts';
-import type { AnyEventInput, Fetch, Rules } from '../core/types.ts';
-import { getOffer } from '../erp/client.ts';
+import type { AnyEventInput, Fetch, Rules, Unit } from '../core/types.ts';
+import { createOrder, getOffer } from '../erp/client.ts';
+import { getProvider } from '../providers/whatsapp/index.ts';
 
 export type Role = 'attendant' | 'ai' | 'marketing' | 'owner' | 'monitor' | 'manager';
 const ROLES: Role[] = ['attendant', 'ai', 'marketing', 'owner', 'monitor', 'manager'];
@@ -37,6 +41,48 @@ export function act<T extends EventType>(ctx: ToolContext, type: T, key: string,
   return { recorded: !r.duplicate, seq: r.event?.seq ?? null };
 }
 
+const errText = (err: unknown) => (err instanceof Error ? err.message : String(err));
+const alreadyLogged = (db: Db, key: string) => db.prepare("SELECT 1 FROM events WHERE source = 'tool' AND external_id = ?").get(key) !== undefined;
+
+// A slow call to another system runs once per key at a time, so a double click cannot send or order twice.
+const inFlight = new Set<string>();
+async function once<T>(key: string, busy: T, run: () => Promise<T>): Promise<T> {
+  if (inFlight.has(key)) return busy;
+  inFlight.add(key);
+  try {
+    return await run();
+  } finally {
+    inFlight.delete(key);
+  }
+}
+
+export interface OutgoingMessage {
+  personId: string; businessNumber: string; text: string; basedOn: { tool: string; readAt: string }[]; askOrigin: boolean; key: string;
+}
+type SendResult = { recorded: boolean; seq: number | null; delivered: boolean };
+
+// Shared by the attendant's tool and the AI: send through the provider the person last wrote from, then
+// record it. Sending comes first because the event carries the provider's message id (hashed).
+export async function sendMessage(ctx: ToolContext, m: OutgoingMessage): Promise<SendResult> {
+  if (!getConversation(ctx.db, m.personId, m.businessNumber)) throw new Error(`conversa ${m.personId} · ${m.businessNumber} não encontrada`);
+  const skipped: SendResult = { recorded: false, seq: null, delivered: false };
+  if (alreadyLogged(ctx.db, m.key)) return skipped;
+  const phone = contactOf(ctx.db, m.personId).phone;
+  if (!phone) throw new Error(`a pessoa ${m.personId} não tem telefone para receber a mensagem`);
+  const provider = getProvider(lastInboundProvider(ctx.db, m.personId, m.businessNumber) ?? undefined, ctx.fetch);
+  return once(m.key, skipped, async () => {
+    const sent = await provider.sendText(phone.replace(/\D/g, ''), m.text, m.businessNumber)
+      .catch((err: unknown) => { throw new Error(`a mensagem não saiu pelo ${provider.name}: ${errText(err)}`); });
+    const r = act(ctx, 'whatsapp_message_sent', m.key, {
+      personId: m.personId, businessNumber: m.businessNumber, textRef: storePii(ctx.db, 'message', m.text), provider: provider.name,
+      externalId: sent.externalId ? hashIdentifier('wa_message', sent.externalId) : null, basedOn: m.basedOn,
+      ...(m.askOrigin ? { askOrigin: true } : {}),
+    });
+    return { ...r, delivered: sent.externalId !== null };
+  });
+}
+
+const PIPELINE: string[] = ['new', 'qualifying', 'proposal', 'pre_enrollment'];
 const unit = z.enum(UNITS);
 const confidence = z.number().min(0).max(1).nullable();
 const ALL: Role[] = ROLES;
@@ -116,6 +162,59 @@ export const tools: Record<string, ToolDef> = {
         if (!passed) throw new Error('liberar exige um lead de teste com campanha observada depois do último alerta');
       }
       return { changed: true, ...act(ctx, 'entry_point_status_changed', `status:${i.code}:${i.status}:${maxSeq(ctx.db)}`, i) };
+    },
+  },
+  reply_to_conversation: {
+    description: 'Responde a conversa pelo WhatsApp; a mensagem fica registrada com quem enviou.',
+    kind: 'action', roles: ['attendant'], approval: 'auto',
+    input: z.object({ personId: z.string(), businessNumber: z.string(), text: z.string().trim().min(1).max(4096) }),
+    run: (ctx, i: { personId: string; businessNumber: string; text: string }) => sendMessage(ctx, {
+      ...i, basedOn: [], askOrigin: false,
+      key: `reply:${i.personId}:${i.businessNumber}:${hashIdentifier('message', i.text).slice(0, 16)}:${maxSeq(ctx.db)}`,
+    }),
+  },
+  set_conversation_mode: {
+    description: 'Passa a conversa para uma pessoa ou devolve à IA.',
+    kind: 'action', roles: ['attendant'], approval: 'auto',
+    input: z.object({ personId: z.string(), businessNumber: z.string(), mode: z.enum(CONVERSATION_MODES), reason: z.string().min(1) }),
+    run: (ctx, i: Payload<'conversation_mode_changed'>) => {
+      const c = getConversation(ctx.db, i.personId, i.businessNumber);
+      if (!c) throw new Error(`conversa ${i.personId} · ${i.businessNumber} não encontrada`);
+      if (c.mode === i.mode) return { changed: false, mode: c.mode };
+      return { changed: true, ...act(ctx, 'conversation_mode_changed', `mode:${i.personId}:${i.businessNumber}:${i.mode}:${maxSeq(ctx.db)}`, i) };
+    },
+  },
+  advance_opportunity: {
+    description: 'Avança a etapa da oportunidade ou marca como perdida; a venda só vem do ERP.',
+    kind: 'action', roles: ['attendant'], approval: 'auto',
+    input: z.object({ opportunityId: z.string(), stage: z.enum(STAGES), reason: z.string().min(1) }),
+    run: (ctx, i: Payload<'opportunity_stage_changed'>) => {
+      if (i.stage === 'won') throw new Error('a etapa won só vem do ERP, com o pagamento confirmado');
+      const o = getOpportunity(ctx.db, i.opportunityId);
+      if (!o) throw new Error(`oportunidade ${i.opportunityId} não existe`);
+      if (o.stage === 'won' || o.stage === 'lost') throw new Error(`a oportunidade ${o.id} já está ${o.stage}`);
+      if (o.stage === i.stage) return { changed: false, stage: o.stage };
+      if (i.stage !== 'lost' && PIPELINE.indexOf(i.stage) < PIPELINE.indexOf(o.stage)) {
+        throw new Error(`a etapa só avança: ${o.stage} não volta para ${i.stage}`);
+      }
+      return { changed: true, ...act(ctx, 'opportunity_stage_changed', `stage:${i.opportunityId}:${i.stage}`, i) };
+    },
+  },
+  request_enrollment: {
+    description: 'Pré-matrícula: cria o pedido no ERP com o id da oportunidade.',
+    kind: 'action', roles: ['attendant'], approval: 'human',
+    input: z.object({ opportunityId: z.string() }),
+    run: async (ctx, { opportunityId }: { opportunityId: string }) => {
+      const o = getOpportunity(ctx.db, opportunityId);
+      if (!o) throw new Error(`oportunidade ${opportunityId} não existe`);
+      if (o.erpOrderId) return { recorded: false, orderId: o.erpOrderId };
+      if (o.stage === 'won' || o.stage === 'lost') throw new Error(`a oportunidade ${o.id} já está ${o.stage}`);
+      const key = `order:${opportunityId}`;
+      return once<{ recorded: boolean; seq?: number | null; orderId: string | null }>(key, { recorded: false, orderId: null }, async () => {
+        // The contact leaves the vault only here, for the order the person asked for.
+        const { orderId } = await createOrder({ opportunityId, product: o.product, unit: o.unit, contact: contactOf(ctx.db, o.personId) }, { fetch: ctx.fetch });
+        return { ...act(ctx, 'erp_order_created', key, { opportunityId, orderId, product: o.product, unit: o.unit as Unit }), orderId };
+      });
     },
   },
 };

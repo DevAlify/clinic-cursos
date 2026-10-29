@@ -53,6 +53,7 @@ export function project(db: Db, e: AnyEvent, rules: Rules): void {
     case 'whatsapp_message_sent': {
       const p = e.payload;
       insertMessage(db, e, p.personId, p.businessNumber, 'out', e.actor, p.textRef, JSON.stringify(p.basedOn));
+      if (p.askOrigin) db.prepare('UPDATE conversations SET origin_asked = 1 WHERE person_id = ? AND business_number = ?').run(p.personId, p.businessNumber);
       return;
     }
     case 'conversation_mode_changed': {

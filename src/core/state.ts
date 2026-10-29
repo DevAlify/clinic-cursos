@@ -1,12 +1,15 @@
+import { getOffer } from '../erp/client.ts';
 import type { Db } from './db.ts';
+import { STAGES } from './events.ts';
 import { listEvents } from './log.ts';
+import { isValidCampaign } from './naming.ts';
 import { readPii } from './pii.ts';
 import {
   allConversations, allEntryPoints, allLinks, allMessages, allOpportunities, allTouches, getConversation, getTouch, messagesOf,
   originOf, touchesOfEntryPoint,
   type ConversationRow, type EntryPointRow, type LinkRow, type MessageRow, type OpportunityRow, type TouchRow,
 } from './queries.ts';
-import type { AnyEvent, Fields, Level, Rules } from './types.ts';
+import type { AnyEvent, Fetch, Fields, Level, Rules, Stage } from './types.ts';
 
 export interface PersonView { id: string; name: string | null; roles: { role: string; unit: string }[]; identifierKinds: string[] }
 export interface QueueView {
@@ -139,4 +142,77 @@ export function getConversationDetail(db: Db, personId: string, businessNumber: 
     messages: messagesOf(db, personId, businessNumber).map(({ textRef, ...m }) => ({ ...m, text: readPii(db, textRef) })),
     opportunities: allOpportunities(db).filter((o) => o.personId === personId),
   };
+}
+
+export interface PipelineCard {
+  id: string; personId: string; name: string | null; product: string; unit: string; stage: string; status: string; openedAt: string;
+  origin: Fields | null; erpOrderId: string | null; erpSaleId: string | null;
+}
+
+// CRM board: opportunities by stage, each with the origin of its attributed touch.
+export function getPipeline(db: Db): Record<Stage, PipelineCard[]> {
+  const board = Object.fromEntries(STAGES.map((s) => [s, [] as PipelineCard[]])) as Record<Stage, PipelineCard[]>;
+  for (const o of allOpportunities(db)) {
+    const p = personRow(db, o.personId);
+    board[o.stage as Stage]?.push({
+      id: o.id, personId: o.personId, name: p ? readPii(db, p.display_ref) : null, product: o.product, unit: o.unit, stage: o.stage, status: o.status,
+      openedAt: o.openedAt, origin: o.firstTouchSeq === null ? null : getTouch(db, o.firstTouchSeq)?.fields ?? null, erpOrderId: o.erpOrderId, erpSaleId: o.erpSaleId,
+    });
+  }
+  return board;
+}
+
+export interface CampaignRow {
+  campaign: string; unit: string | null; product: string | null; leads: number; opportunities: number; won: number;
+  levels: LevelMix; seatsLeft: number | null; spend: number | null; costPerLead: number | null; costPerSale: number | null;
+}
+const money = (n: number) => Math.round(n * 100) / 100;
+
+// Marketing view per campaign. Like the coverage numbers, only leads from released entry points count.
+export async function getCampaigns(db: Db, spend: Record<string, number>, fetchImpl: Fetch = fetch): Promise<CampaignRow[]> {
+  const released = new Set(allEntryPoints(db).filter((ep) => ep.status === 'released').map((ep) => ep.code));
+  const counted = (t: TouchRow | null | undefined) =>
+    t && !t.isTest && t.fields.campaign.value && released.has(t.fields.entryPoint.value ?? '') ? t.fields.campaign.value : null;
+  const rows = new Map<string, { leads: Set<string>; levels: LevelMix; opportunities: number; won: number }>();
+  const row = (name: string) => {
+    let r = rows.get(name);
+    if (!r) rows.set(name, (r = { leads: new Set(), levels: { total: 0, observed: 0, declared: 0, inferred: 0, unknown: 0 }, opportunities: 0, won: 0 }));
+    return r;
+  };
+  for (const name of Object.keys(spend)) row(name);
+  for (const t of allTouches(db)) {
+    const name = counted(t);
+    if (!name) continue;
+    const r = row(name);
+    if (r.leads.has(t.personId)) continue;
+    r.leads.add(t.personId);
+    r.levels.total += 1;
+    r.levels[t.fields.campaign.level] += 1;
+  }
+  for (const o of allOpportunities(db)) {
+    const name = counted(o.firstTouchSeq === null ? null : getTouch(db, o.firstTouchSeq));
+    if (!name) continue;
+    row(name).opportunities += 1;
+    if (o.status === 'won') row(name).won += 1;
+  }
+  const out: CampaignRow[] = [];
+  for (const [campaign, r] of [...rows].sort(([a], [b]) => a.localeCompare(b))) {
+    const [unit, product] = isValidCampaign(campaign) ? campaign.split('_') : [null, null];
+    let seatsLeft: number | null = null;
+    if (unit && product) {
+      try {
+        seatsLeft = (await getOffer(product, unit, { fetch: fetchImpl }))?.seatsLeft ?? null;
+      } catch (err) {
+        // The panel still loads without seats; the ERP problem is logged with the campaign.
+        console.error(`vagas da campanha ${campaign} indisponíveis: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    const cost = spend[campaign] ?? null;
+    out.push({
+      campaign, unit, product, leads: r.leads.size, opportunities: r.opportunities, won: r.won, levels: r.levels, seatsLeft, spend: cost,
+      costPerLead: cost !== null && r.leads.size > 0 ? money(cost / r.leads.size) : null,
+      costPerSale: cost !== null && r.won > 0 ? money(cost / r.won) : null,
+    });
+  }
+  return out;
 }

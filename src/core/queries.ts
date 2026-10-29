@@ -84,6 +84,13 @@ export function originOf(db: Db, personId: string): Fields | null {
   return (touches.findLast((t) => t.fields.channel.level !== 'unknown') ?? touches.at(-1))?.fields ?? null;
 }
 
+// Replies go out through the provider the person last wrote from.
+export function lastInboundProvider(db: Db, personId: string, businessNumber: string): string | null {
+  const row = db.prepare(`SELECT json_extract(e.payload, '$.provider') AS provider FROM messages m JOIN events e ON e.seq = m.seq
+    WHERE m.person_id = ? AND m.business_number = ? AND m.direction = 'in' ORDER BY m.seq DESC LIMIT 1`).get(personId, businessNumber) as { provider: string } | undefined;
+  return row?.provider ?? null;
+}
+
 // Contact read from the vault, only for an action that needs it (sending a message, creating an ERP order).
 export function contactOf(db: Db, personId: string): { name: string | null; phone: string | null; email: string | null } {
   const ref = (kind: string) => (db.prepare('SELECT pii_ref FROM identifiers WHERE person_id = ? AND kind = ? ORDER BY rowid LIMIT 1').get(personId, kind) as { pii_ref: string | null } | undefined)?.pii_ref ?? null;

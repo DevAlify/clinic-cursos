@@ -15,6 +15,8 @@ export const PEOPLE = {
 } as const;
 
 export const CAMPAIGNS = { spHof: 'sp_hof_captacao_202610', cpsHof: 'cps_hof_captacao_202610', rjCursos: 'rj_cursos_divulgacao_202610' } as const;
+// Fictitious media spend in October, in reais, for cost per lead and per sale.
+export const CAMPAIGN_SPEND: Record<string, number> = { [CAMPAIGNS.spHof]: 4800, [CAMPAIGNS.cpsHof]: 6200, [CAMPAIGNS.rjCursos]: 900 };
 export const QR_CODE = 'K7P2';
 export const QR_TEXT = 'Olá! Vi o cartaz na recepção e quero saber dos cursos (cód. K7P2)';
 // WAHA message ids embed the sender's number, like real ones do.
@@ -24,5 +26,5 @@ export const SECRETS_IN_FIXTURES = [
   ...Object.values(PEOPLE).map((p) => p.name),
   'ana.lima@', 'bruna.souza@', 'eduardo.alves@', 'felipe.costa@', 'gabriela.nunes@', 'helena.prado@',
   '87650001', '88880002', '77770003', '66660004', '55550005', '44440006', '44440007', '44440008',
-  'cartaz na recepção', 'turma de novembro', 'quanto custa', 'inscrever na turma',
+  'cartaz na recepção', 'turma de novembro', 'quanto custa', 'inscrever na turma', 'inchaço', 'consultado no ERP', 'Separei uma vaga',
 ];

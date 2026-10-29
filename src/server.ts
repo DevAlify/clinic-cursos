@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
+import { CAMPAIGN_SPEND } from '../scenarios/fixtures.ts';
 import { seed } from '../scenarios/seed.ts';
 import { steps } from '../scenarios/steps.ts';
 import { DEFAULT_RULES, SECRETS } from './config.ts';
@@ -10,7 +11,7 @@ import type { ApplyResult } from './core/apply.ts';
 import { ingest } from './core/ingest.ts';
 import { getLink } from './core/queries.ts';
 import { previewRules, rebuild } from './core/replay.ts';
-import { getConversationDetail, getState, listConversations } from './core/state.ts';
+import { getCampaigns, getConversationDetail, getPipeline, getState, listConversations } from './core/state.ts';
 import type { Fetch, ProviderName, Rules } from './core/types.ts';
 import { erpBodySchema, parseErp } from './gateway/erp.ts';
 import { formBodySchema, parseForm } from './gateway/form.ts';
@@ -99,6 +100,8 @@ export function createApp(opts: AppOptions) {
 
   app.get('/api/state', (c) => c.json(getState(db, rules)));
   app.get('/api/conversations', (c) => c.json(listConversations(db)));
+  app.get('/api/pipeline', (c) => c.json(getPipeline(db)));
+  app.get('/api/campaigns', async (c) => c.json(await getCampaigns(db, CAMPAIGN_SPEND, io)));
   app.get('/api/conversations/:personId/:businessNumber', (c) => {
     const detail = getConversationDetail(db, c.req.param('personId'), c.req.param('businessNumber'));
     return detail ? c.json(detail) : c.json({ error: 'conversa não encontrada' }, 404);

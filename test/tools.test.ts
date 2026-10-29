@@ -33,10 +33,11 @@ test('routing sends sensitive subjects to people and sales to the right unit', (
   assert.deepEqual(routeFor('course_purchase', 'sp', 0.5, 0.85).queue, 'triage');
 });
 
-test('there are exactly eight tools', () => {
+test('there are exactly twelve tools', () => {
   assert.deepEqual(Object.keys(tools).sort(), [
-    'explain_origin', 'get_course_offer', 'open_opportunity', 'origin_coverage',
-    'propose_merge', 'record_declared_origin', 'route_conversation', 'set_entry_point_status',
+    'advance_opportunity', 'explain_origin', 'get_course_offer', 'open_opportunity', 'origin_coverage',
+    'propose_merge', 'record_declared_origin', 'reply_to_conversation', 'request_enrollment', 'route_conversation',
+    'set_conversation_mode', 'set_entry_point_status',
   ]);
 });
 

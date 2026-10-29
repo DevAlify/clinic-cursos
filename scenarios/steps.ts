@@ -39,6 +39,13 @@ const daniel = (key: string, text: string, at: string): Message => ({ id: messag
 const noUtm = (key: 'felipe' | 'gabriela' | 'helena', time: string) =>
   form(`form-${key}-0001`, 'cps-lp-hof-01', brt(`2026-10-29T${time}`), PEOPLE[key], {}, { gclid: `GCLID-${key.toUpperCase()}` });
 
+function anaPersonId(db: Db): string | null {
+  const hash = hashIdentifier('phone', normalizePhone(PEOPLE.ana.phone, false)!);
+  return (db.prepare("SELECT person_id FROM identifiers WHERE kind = 'phone' AND hash = ?").get(hash) as { person_id: string } | undefined)?.person_id ?? null;
+}
+const attendant = (tool: string, at: string, payload: unknown) =>
+  json(`/tools/${tool}`, payload, { 'x-actor': 'attendant:joana', 'x-occurred-at': brt(`2026-10-29T${at}`) });
+
 function anaOpportunityId(db: Db): string | null {
   const hash = hashIdentifier('phone', normalizePhone(PEOPLE.ana.phone, false)!);
   const row = db.prepare("SELECT o.id FROM opportunities o JOIN identifiers i ON i.person_id = o.person_id WHERE i.kind = 'phone' AND i.hash = ? AND o.product = 'hof' AND o.unit = 'sp' AND o.status = 'open'").get(hash) as { id: string } | undefined;
@@ -57,9 +64,14 @@ export const steps: Step[] = [
   { id: 'helena-form-no-utm', who: 'Helena', label: 'Preenche a LP de Campinas: terceiro lead sem campanha', build: () => noUtm('helena', '14:40') },
   { id: 'daniel-whatsapp-1', who: 'Daniel', label: 'Chama no WhatsApp de Campinas, sem código', build: () => whatsapp(daniel('DANIEL1', 'Oi, quanto custa o curso de harmonização?', brt('2026-10-29T15:00'))) },
   { id: 'daniel-whatsapp-2', who: 'Daniel', label: 'Responde como conheceu a Clinic', build: () => whatsapp(daniel('DANIEL2', 'Vi no insta', brt('2026-10-29T15:05'))) },
+  { id: 'paciente-inchaco', who: 'Helena', label: 'Escreve no WhatsApp de Campinas sobre um inchaço depois do procedimento', build: () => whatsapp({ id: messageId(PEOPLE.helena, 'HELENA1'), waId: PEOPLE.helena.waId, name: PEOPLE.helena.name, to: NUMBERS.cps, text: 'Estou com inchaço depois do procedimento', at: brt('2026-10-29T15:10') }) },
   { id: 'carla-whatsapp-return', who: 'Carla', label: 'Volta 19 dias depois, direto no WhatsApp', build: () => whatsapp({ ...carla1, id: messageId(PEOPLE.carla, 'CARLA2'), text: 'Oi! Quero me inscrever na turma de harmonização', at: brt('2026-10-29T15:30') }) },
   { id: 'cps-test-lead', who: 'Marketing', label: 'Corrige a LP de Campinas e envia um lead de teste', build: () => form('form-teste-cps-0001', 'cps-lp-hof-01', brt('2026-10-29T16:00'), { name: 'Teste Marketing', email: 'teste.marketing@example.com' }, { source: 'google', medium: 'cpc', campaign: CAMPAIGNS.cpsHof }, { gclid: 'GCLID-TESTE' }, true) },
   { id: 'cps-owner-release', who: 'Marketing', label: 'Libera o ponto depois do teste', build: () => json('/tools/set_entry_point_status', { code: 'cps-lp-hof-01', status: 'released', reason: 'página corrigida e lead de teste aprovado' }, { 'x-actor': 'owner:marketing', 'x-occurred-at': brt('2026-10-29T16:05') }) },
   { id: 'eduardo-erp-sale', who: 'ERP', label: 'Confirma uma venda sem oportunidade ligada', build: () => erp({ type: 'sale_confirmed', saleId: 'ERP-SALE-0999', confirmedAt: brt('2026-10-29T16:30'), opportunityId: null, name: PEOPLE.eduardo.name, phone: PEOPLE.eduardo.phone, email: PEOPLE.eduardo.email, product: 'hof', unit: 'sp' }) },
-  { id: 'ana-erp-sale', who: 'ERP', label: 'Confirma a matrícula da Ana, com o id da oportunidade', build: ({ db }) => erp({ type: 'sale_confirmed', saleId: 'ERP-SALE-1001', confirmedAt: brt('2026-10-29T17:00'), opportunityId: anaOpportunityId(db), name: PEOPLE.ana.name, phone: PEOPLE.ana.phone, email: PEOPLE.ana.email, product: 'hof', unit: 'sp' }) },
+  { id: 'atendente-assume-ana', who: 'Atendente', label: 'Assume a conversa da Ana', build: ({ db }) => attendant('set_conversation_mode', '16:40', { personId: anaPersonId(db), businessNumber: NUMBERS.sp, mode: 'human', reason: 'atendente assume a venda' }) },
+  { id: 'atendente-responde-ana', who: 'Atendente', label: 'Responde a Ana pelo WhatsApp', build: ({ db }) => attendant('reply_to_conversation', '16:42', { personId: anaPersonId(db), businessNumber: NUMBERS.sp, text: 'Oi, Ana! Aqui é a Joana, da Clinic SP. Separei uma vaga para você na turma de 14/11. Posso fazer sua pré-matrícula?' }) },
+  { id: 'atendente-proposta-ana', who: 'Atendente', label: 'Avança a oportunidade da Ana para proposta', build: ({ db }) => attendant('advance_opportunity', '16:45', { opportunityId: anaOpportunityId(db), stage: 'proposal', reason: 'proposta enviada no WhatsApp' }) },
+  { id: 'atendente-pre-matricula-ana', who: 'Atendente', label: 'Registra a pré-matrícula: o pedido vai para o ERP', build: ({ db }) => attendant('request_enrollment', '16:50', { opportunityId: anaOpportunityId(db) }) },
+  { id: 'ana-erp-sale', who: 'ERP', label: 'O ERP confirma o pagamento do pedido da Ana, com o id da oportunidade', build: ({ db }) => erp({ type: 'sale_confirmed', saleId: 'ERP-SALE-1001', confirmedAt: brt('2026-10-29T17:00'), opportunityId: anaOpportunityId(db), name: PEOPLE.ana.name, phone: PEOPLE.ana.phone, email: PEOPLE.ana.email, product: 'hof', unit: 'sp' }) },
 ];

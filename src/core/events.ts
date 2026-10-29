@@ -42,6 +42,7 @@ export const payloadSchemas = {
   whatsapp_message_sent: z.object({
     personId: z.string(), businessNumber: z.string(), textRef: z.string(), provider, externalId: z.string().nullable(),
     basedOn: z.array(z.object({ tool: z.string(), readAt: z.string() })),
+    askOrigin: z.boolean().optional(),
   }),
   conversation_mode_changed: z.object({
     personId: z.string(), businessNumber: z.string(), mode: z.enum(CONVERSATION_MODES), reason: z.string(),
