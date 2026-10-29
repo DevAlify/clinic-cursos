@@ -71,7 +71,7 @@ Saída real de `npm run verify`, colada depois de rodar neste repositório com o
   OK     Daniel: canal e campanha desconhecidos, sem chute                                    obtido: canal unknown · campanha unknown
   OK     Daniel vai para vendas de Campinas, com a unidade inferida pelo número               obtido: sales-cps · unidade inferred
   OK     Daniel declara o Instagram: canal declarado, lido pela IA                            obtido: instagram · declared · ai:simulated-v1 · "Vi no insta"
-  OK     A oportunidade do Daniel aponta para o toque declarado                               obtido: instagram (declared) · campanha — (unknown)
+  OK     A oportunidade do Daniel aponta para o toque declarado                               obtido: instagram (declared) · campanha sem valor (unknown)
 
 3. Pessoa existente volta por outra campanha
   OK     Bruna continua uma ficha só: paciente e lead em Campinas                             obtido: 1 ficha(s) · lead@cps, patient@cps

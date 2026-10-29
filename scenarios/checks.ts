@@ -28,7 +28,7 @@ const routes = (s: State, name: string) => s.queue.filter((q) => q.kind === 'rou
 const ok = (pass: boolean, actual: string) => ({ ok: pass, actual });
 const describeChannel = (s: State, seq: number | null | undefined) => {
   const f = touch(s, seq)?.fields;
-  return f ? `${f.channel.value ?? '—'} (${f.channel.level}) · campanha ${f.campaign.value ?? '—'} (${f.campaign.level})` : 'sem toque';
+  return f ? `${f.channel.value ?? 'canal sem valor'} (${f.channel.level}) · campanha ${f.campaign.value ?? 'sem valor'} (${f.campaign.level})` : 'sem toque';
 };
 const noUtmPeople = [PEOPLE.felipe.name, PEOPLE.gabriela.name, PEOPLE.helena.name];
 const conversation = (s: State, name: string, number: string) => s.conversations.find((c) => c.personId === person(s, name)?.id && c.businessNumber === number);
@@ -82,7 +82,7 @@ export const checks: Check[] = [
   { afterStep: 'helena-form-no-utm', scenario: S6, expected: 'Felipe, Gabriela e Helena: canal observado e campanha desconhecida', run: ({ state }) => {
     const rows = noUtmPeople.map((n) => touchesOf(state, n)[0]?.fields);
     return ok(rows.every((f) => f?.channel.value === 'google_ads' && f.channel.level === 'observed' && f.campaign.level === 'unknown'),
-      rows.map((f) => (f ? `${f.channel.value}/${f.campaign.level}` : '—')).join(' · '));
+      rows.map((f) => (f ? `${f.channel.value}/${f.campaign.level}` : 'sem toque')).join(' · '));
   } },
   { afterStep: 'helena-form-no-utm', scenario: S6, expected: 'Um alerta para cps-lp-hof-01, com ação e responsável', run: ({ state }) => {
     const a = state.alerts.filter((x) => x.entryPoint === 'cps-lp-hof-01' && x.kind === 'campaign_coverage_drop');
@@ -90,7 +90,7 @@ export const checks: Check[] = [
   } },
   { afterStep: 'helena-form-no-utm', scenario: S6, expected: 'O ponto vai para "em auditoria"', run: ({ state }) => {
     const s = state.entryPoints.find((e) => e.code === 'cps-lp-hof-01')?.status;
-    return ok(s === 'auditing', s ?? '—');
+    return ok(s === 'auditing', s ?? 'sem status');
   } },
   { afterStep: 'daniel-whatsapp-1', scenario: S2, expected: 'Daniel: canal e campanha desconhecidos, sem chute', run: ({ state }) => {
     const f = touchesOf(state, PEOPLE.daniel.name)[0]?.fields;
@@ -98,7 +98,7 @@ export const checks: Check[] = [
   } },
   { afterStep: 'daniel-whatsapp-1', scenario: S2, expected: 'Daniel vai para vendas de Campinas, com a unidade inferida pelo número', run: ({ state }) => {
     const f = touchesOf(state, PEOPLE.daniel.name)[0]?.fields;
-    return ok(routes(state, PEOPLE.daniel.name).join() === 'sales-cps' && f?.unit.level === 'inferred', `${routes(state, PEOPLE.daniel.name).join() || 'sem fila'} · unidade ${f?.unit.level ?? '—'}`);
+    return ok(routes(state, PEOPLE.daniel.name).join() === 'sales-cps' && f?.unit.level === 'inferred', `${routes(state, PEOPLE.daniel.name).join() || 'sem fila'} · unidade ${f?.unit.level ?? 'sem toque'}`);
   } },
   { afterStep: 'daniel-whatsapp-1', scenario: S7, expected: 'A IA pergunta ao Daniel como conheceu a Clinic, com opções', run: ({ db, state }) => {
     const m = sent(state, PEOPLE.daniel.name, NUMBERS.cps)[0];
@@ -130,7 +130,7 @@ export const checks: Check[] = [
   } },
   { afterStep: 'cps-owner-release', scenario: S6, expected: 'Com o lead de teste aprovado, o dono libera o ponto', run: ({ state }) => {
     const s = state.entryPoints.find((e) => e.code === 'cps-lp-hof-01')?.status;
-    return ok(s === 'released', s ?? '—');
+    return ok(s === 'released', s ?? 'sem status');
   } },
   { afterStep: 'cps-owner-release', scenario: S6, expected: 'Os três leads continuam com a campanha desconhecida', run: ({ state }) => {
     const levels = noUtmPeople.map((n) => touchesOf(state, n)[0]?.fields.campaign.level);
@@ -185,6 +185,6 @@ export const checks: Check[] = [
   { afterStep: 'end', scenario: X3, expected: 'Com janela de 14 dias, só a atribuição da Carla muda', run: ({ db, rules }) => {
     const changes = previewRules(db, { ...rules, attributionWindowDays: 14 });
     return ok(changes.length === 1 && changes[0].personName === PEOPLE.carla.name && changes[0].after === null,
-      changes.map((c) => `${c.personName}: ${c.before?.channel ?? '—'} → ${c.after?.channel ?? 'desconhecida'}`).join('; ') || 'nenhuma mudança');
+      changes.map((c) => `${c.personName}: ${c.before?.channel ?? 'sem origem'} → ${c.after?.channel ?? 'desconhecida'}`).join('; ') || 'nenhuma mudança');
   } },
 ];

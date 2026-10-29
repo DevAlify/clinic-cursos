@@ -49,7 +49,7 @@ function Heading({ children }: { children: React.ReactNode }) {
 
 export function SideCard({ detail, onChanged }: { detail: ConversationDetail; onChanged: () => Promise<void> }) {
   return (
-    <aside aria-label="Ficha da pessoa" className="min-h-0 space-y-5 overflow-y-auto border-l bg-card p-4">
+    <aside aria-label="Ficha da pessoa" tabIndex={0} className="min-h-0 space-y-5 overflow-y-auto border-l bg-card p-4">
       <section>
         <Heading>Pessoa</Heading>
         <p className="font-medium">{detail.person.name ?? 'Pessoa sem nome'}</p>

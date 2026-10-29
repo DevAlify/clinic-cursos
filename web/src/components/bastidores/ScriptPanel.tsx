@@ -69,6 +69,7 @@ export function ScriptPanel({ steps, state, refresh }: { steps: Poll<StepView[]>
           <progress className="h-1.5 w-24 accent-primary" max={Math.max(list.length, 1)} value={done} aria-label="Passos feitos" />
         </div>
         <ActionError message={action.error} />
+        <p role="status" className="sr-only">{lastDone >= 0 ? `Passo ${lastDone + 1} de ${list.length}: ${list[lastDone]?.who}, ${list[lastDone]?.label}` : 'Nenhum passo feito.'}</p>
       </div>
       <div role="region" tabIndex={0} aria-label="Acontecimentos e controles da demonstração" className="min-h-0 flex-1 overflow-auto overscroll-contain">
         <Resource poll={steps} what="O roteiro" skeleton={<StepsSkeleton />}>

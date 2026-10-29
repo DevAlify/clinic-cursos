@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { OpportunityPanel } from '@/components/crm/OpportunityPanel';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Code, OriginSummaryView } from '@/components/origin';
 import { Resource } from '@/components/states';
@@ -30,7 +31,7 @@ function Card({ card, active, onOpen }: { card: PipelineCard; active: boolean; o
         aria-expanded={active}
         aria-label={`${name}, ${what}. Abrir ficha`}
         onClick={(e) => onOpen(e.currentTarget)}
-        className={cn('w-full rounded-md border bg-card p-3 text-left text-sm outline-none transition-colors hover:bg-background focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50', active && 'border-foreground')}
+        className={cn('w-full rounded-md border bg-card p-3 text-left text-sm outline-none transition-colors hover:bg-background focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring', active && 'border-foreground')}
       >
         <span className="block truncate font-semibold" title={name}>{name}</span>
         <span className="mt-0.5 block text-meta text-muted-foreground">{what}</span>
@@ -42,8 +43,13 @@ function Card({ card, active, onOpen }: { card: PipelineCard; active: boolean; o
   );
 }
 
+// A column shows its newest cards first and folds the rest behind a button (the seed alone adds 25 historical leads).
+const COLUMN_LIMIT = 6;
+
 function Board({ pipeline }: { pipeline: Pipeline }) {
   const [open, setOpen] = useState<PipelineCard | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggle = (stage: string) => setExpanded((prev) => { const next = new Set(prev); if (!next.delete(stage)) next.add(stage); return next; });
   const trigger = useRef<HTMLElement | null>(null);
   const selected = open ? Object.values(pipeline).flat().find((c) => c.id === open.id) ?? open : null;
   const close = () => { setOpen(null); trigger.current?.focus(); };
@@ -56,8 +62,15 @@ function Board({ pipeline }: { pipeline: Pipeline }) {
               {stageLabel(stage)}
               <span className="rounded-sm border bg-card px-1.5 text-meta font-semibold tabular-nums">{pipeline[stage].length}</span>
             </h2>
+            {pipeline[stage].length > COLUMN_LIMIT && (
+              <div className="shrink-0 px-2.5 pb-2">
+                <Button variant="outline" size="lg" className="w-full" aria-expanded={expanded.has(stage)} onClick={() => toggle(stage)}>
+                  {expanded.has(stage) ? 'Mostrar menos' : `+${pipeline[stage].length - COLUMN_LIMIT} ${pipeline[stage].length - COLUMN_LIMIT === 1 ? 'oportunidade' : 'oportunidades'}`}
+                </Button>
+              </div>
+            )}
             <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto px-2.5 pb-2.5">
-              {pipeline[stage].map((c) => (
+              {(expanded.has(stage) ? pipeline[stage] : pipeline[stage].slice(0, COLUMN_LIMIT)).map((c) => (
                 <Card key={c.id} card={c} active={selected?.id === c.id} onOpen={(el) => { trigger.current = el; setOpen(c); }} />
               ))}
               {pipeline[stage].length === 0 && <li className="px-1 py-4 text-center text-meta text-muted-foreground">Nenhuma oportunidade</li>}

@@ -28,7 +28,7 @@ export function OpportunityPanel({ card, onClose }: { card: PipelineCard; onClos
         </div>
         <Button ref={closeRef} variant="ghost" size="icon" aria-label="Fechar a ficha" onClick={onClose}><X aria-hidden="true" /></Button>
       </div>
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+      <div role="region" tabIndex={0} aria-label="Dados da ficha" className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
         <div className="flex flex-wrap items-center gap-2 text-sm">
           Etapa <Badge variant="outline" className="h-auto rounded-sm py-0.5 text-meta font-semibold">{stageLabel(card.stage)}</Badge>
         </div>

@@ -63,7 +63,7 @@ export function ConversationList({ poll, items, selected, onSelect }: Props) {
                   type="button"
                   aria-current={active ? 'true' : undefined}
                   onClick={() => onSelect({ personId: c.personId, businessNumber: c.businessNumber })}
-                  className={cn('flex w-full gap-3 border-b border-l-[3px] px-4 py-3 text-left transition-colors outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50', active ? 'border-l-foreground bg-secondary' : 'border-l-transparent')}
+                  className={cn('flex w-full gap-3 border-b border-l-[3px] px-4 py-3 text-left transition-colors outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring', active ? 'border-l-foreground bg-secondary' : 'border-l-transparent')}
                 >
                   <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-md border bg-muted text-sm font-semibold text-muted-foreground">{initials(c.name)}</span>
                   <span className="min-w-0 flex-1">

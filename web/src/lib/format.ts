@@ -15,7 +15,7 @@ const STAGE_LABEL: Record<Stage, string> = {
 };
 
 const UNIT_LABEL: Record<string, string> = { sp: 'SP', rj: 'Rio', cps: 'Campinas', online: 'Online' };
-const PRODUCT_LABEL: Record<string, string> = { hof: 'Harmonização orofacial', cursos: 'Cursos' };
+const PRODUCT_LABEL: Record<string, string> = { hof: 'Harmonização Facial', cursos: 'Cursos' };
 const CHANNEL_LABEL: Record<string, string> = {
   qr: 'QR da recepção', google_ads: 'Google Ads', meta_ads: 'Meta Ads', instagram: 'Instagram', google: 'Google', referral: 'Indicação', other: 'Outro',
 };

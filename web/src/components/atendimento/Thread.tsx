@@ -78,7 +78,7 @@ export function Thread({ detail, onChanged }: { detail: ConversationDetail; onCh
       </div>
       <form onSubmit={(e) => void reply(e)} className="shrink-0 border-t bg-card px-5 py-3">
         <div className="flex gap-2">
-          <Input value={text} onChange={(e) => setText(e.target.value)} disabled={!human || send.busy} aria-label="Mensagem para o cliente" placeholder={human ? 'Escreva a resposta' : 'Assuma a conversa para responder'} className="h-9" />
+          <Input value={text} onChange={(e) => setText(e.target.value)} disabled={!human || send.busy} aria-label="Mensagem para o cliente" name="message" autoComplete="off" placeholder={human ? 'Escreva a resposta' : 'Assuma a conversa para responder'} className="h-9" />
           <Button type="submit" size="lg" disabled={!human || send.busy || text.trim() === ''}>Responder</Button>
         </div>
         {!human && <p className="mt-1.5 text-meta text-muted-foreground">A IA está respondendo. Clique em Assumir para falar com o cliente.</p>}
