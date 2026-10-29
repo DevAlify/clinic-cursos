@@ -4,3 +4,4 @@ Desafio_Product_Builder_Clinic_Cursos.pdf
 node_modules/
 web/dist/
 *.db
+data/
