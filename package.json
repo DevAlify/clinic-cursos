@@ -9,7 +9,10 @@
     "test": "node --test \"test/**/*.test.ts\"",
     "replay": "node scripts/replay.ts",
     "build:web": "npm run build --workspace web",
-    "demo": "npm run build:web && node src/main.ts",
+    "demo": "npm run build:web && node scripts/demo.ts",
+    "start:core": "node src/main.ts",
+    "start:erp": "node services/erp/main.ts",
+    "start:waha": "node services/waha/main.ts",
     "typecheck": "tsc -p tsconfig.json && npm run typecheck --workspace web"
   },
   "dependencies": {
