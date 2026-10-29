@@ -5,6 +5,8 @@ import { classifyMessage, routeFor } from '../src/ai/classify.ts';
 import { openDb } from '../src/core/db.ts';
 import { appendAndProject } from '../src/core/apply.ts';
 import { toIdentifier } from '../src/core/pii.ts';
+import { maxSeq } from '../src/core/log.ts';
+import { getTouch } from '../src/core/queries.ts';
 import { getState } from '../src/core/state.ts';
 import { callTool, tools } from '../src/tools/registry.ts';
 
@@ -69,4 +71,33 @@ test('course offers come from the ERP with source and time', () => {
   assert.equal(r.ok, true);
   const offer = (r as { result: { source: string; readAt: string; seatsLeft: number } }).result;
   assert.deepEqual([offer.source, offer.readAt, offer.seatsLeft], ['erp-simulado', NOW, 2]);
+});
+
+test('an action whose projection fails is reported as failed, and the event stays in the log', () => {
+  const db = setup();
+  db.exec('DROP TABLE queue_items');
+  const before = maxSeq(db);
+  const r = callTool(db, 'route_conversation', { messageSeq: 7, personId: 'P1', queue: 'sales-cps', reason: 'r', summary: 's', intent: 'course_purchase', confidence: 0.91, model: 'simulated-v1' }, 'ai:simulated-v1', R, NOW);
+  assert.equal(r.ok, false);
+  assert.match((r as { error: string }).error, /queue_items/);
+  assert.equal(maxSeq(db), before + 1);
+  assert.equal((db.prepare('SELECT COUNT(*) AS n FROM quarantine').get() as { n: number }).n, 1);
+});
+
+test('declaring an origin on a touch that is not the person\'s is rejected before any event is written', () => {
+  const db = setup();
+  const lead = (id: string, phone: string) => appendAndProject(db, { source: 'form', externalId: id, type: 'form_submitted', occurredAt: NOW, actor: 'system', payload: { entryPoint: 'cps-lp-hof-01', identifiers: [toIdentifier(db, 'phone', phone)!], displayRef: null, utm: {}, clickIds: {}, test: false } }, R).event!;
+  const a = lead('fa', '(19) 93333-0001');
+  const b = lead('fb', '(19) 93333-0002');
+  const personA = getTouch(db, a.seq)!.personId;
+  const declare = (touchSeq: number) => callTool(db, 'record_declared_origin', { personId: personA, touchSeq, value: 'instagram', quote: 'Vi no insta', confidence: 0.93, triggerSeq: 99 }, 'ai:simulated-v1', R, NOW);
+  const before = maxSeq(db);
+  for (const seq of [b.seq, 999]) {
+    const r = declare(seq);
+    assert.equal(r.ok, false);
+    assert.equal((r as { error: string }).error, `o contato ${seq} não pertence à pessoa ${personA}`);
+  }
+  assert.equal(maxSeq(db), before);
+  assert.equal(declare(a.seq).ok, true);
+  assert.equal(getTouch(db, a.seq)?.fields.channel.level, 'declared');
 });

@@ -29,9 +29,11 @@ interface ToolDef {
 export type ToolResult = { ok: true; result: unknown } | { ok: false; error: string };
 
 // Every action is an event in the log, keyed by what triggered it: repeating it changes nothing.
+// If the projection fails the event stays in the log (quarantined), but the caller must learn the action failed.
 function act<T extends EventType>(ctx: ToolContext, type: T, key: string, payload: Payload<T>) {
   const r = appendAndProject(ctx.db, { source: 'tool', externalId: key, type, occurredAt: ctx.now, actor: ctx.actor, payload } as AnyEventInput, ctx.rules);
-  return { recorded: !r.duplicate, seq: r.event?.seq ?? null, error: r.error };
+  if (r.error !== null) throw new Error(`a ação ${type} foi gravada no log, mas a projeção falhou: ${r.error}`);
+  return { recorded: !r.duplicate, seq: r.event?.seq ?? null };
 }
 
 const unit = z.enum(UNITS);
@@ -84,8 +86,11 @@ export const tools: Record<string, ToolDef> = {
     description: 'Grava a origem que a pessoa declarou.',
     kind: 'action', roles: ['ai', 'attendant'], approval: 'auto_above_confidence',
     input: z.object({ personId: z.string(), touchSeq: z.number().int(), value: z.string().min(1), quote: z.string(), confidence, triggerSeq: z.number().int() }),
-    run: (ctx, i: { personId: string; touchSeq: number; value: string; quote: string; confidence: number | null; triggerSeq: number }) =>
-      act(ctx, 'origin_declared', `origin:${i.triggerSeq}:${roleOf(ctx.actor)}`, { personId: i.personId, touchSeq: i.touchSeq, value: i.value, quote: i.quote, confidence: i.confidence }),
+    run: (ctx, i: { personId: string; touchSeq: number; value: string; quote: string; confidence: number | null; triggerSeq: number }) => {
+      // Checked before the event is written: a touch of another person (or none) must never reach the log.
+      if (getTouch(ctx.db, i.touchSeq)?.personId !== i.personId) throw new Error(`o contato ${i.touchSeq} não pertence à pessoa ${i.personId}`);
+      return act(ctx, 'origin_declared', `origin:${i.triggerSeq}:${roleOf(ctx.actor)}`, { personId: i.personId, touchSeq: i.touchSeq, value: i.value, quote: i.quote, confidence: i.confidence });
+    },
   },
   propose_merge: {
     description: 'Sugere unir duas fichas; a união é sempre aprovada por uma pessoa.',
