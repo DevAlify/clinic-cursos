@@ -17,7 +17,7 @@ export const INTENT_LABEL: Record<Intent, string> = {
 
 // Order matters: sensitive subjects win over sales words in the same message.
 const INTENT_RULES: [Intent, RegExp][] = [
-  ['clinical_question', /\b(dor|inchad\w*|incha[çc]o|hematoma|rea[çc][ãa]o|alergia|febre)\b/i],
+  ['clinical_question', /\b(dor|inchad\w*|incha[çc]o|hematoma|rea[çc][ãa]o|alergia|febre|intercorr[êe]ncia)\b/i],
   ['complaint', /\b(reclama\w*|insatisfeit\w*|p[ée]ssim\w*|absurd\w*|procon)\b/i],
   ['patient_booking', /\b(paciente|modelo|agendar)\b/i],
   ['student_question', /\b(aluno|aluna|certificado|apostila)\b/i],

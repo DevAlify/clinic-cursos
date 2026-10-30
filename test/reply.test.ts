@@ -22,7 +22,7 @@ test('a course question with an ERP offer answers price, seats and date, citing 
   const r = composeReply(ctx('Oi! Quero saber da turma de novembro de harmonização', { offer: findOffer('hof', 'sp') }));
   assert.deepEqual(r, {
     text: 'Olá, Ana! A turma de Harmonização Facial em São Paulo começa em 14/11, custa R$ 7.900 e tem 3 vagas (consultado no ERP às 14:10). Quer garantir a sua?',
-    basedOn: [{ tool: 'get_course_offer', readAt: NOW }],
+    basedOn: [{ tool: 'get_course_offer', readAt: NOW }], offer: { product: 'hof', unit: 'sp' },
   });
 });
 
@@ -110,7 +110,8 @@ test('no second greeting once the clinic has already written in the conversation
   // The confirmed reply ends with the hand-off, never with a question (not even the origin one).
   assert.match(composeReply(ctx('Quanto custa o curso?', { offer: findOffer('hof', 'rj')!, greeted: true, confirmed: true, fields: unknownChannel }))!.text, /equipe de vendas do Rio de Janeiro\.$/);
   assert.match(composeReply(ctx('Quanto custa o curso?', { offer: findOffer('hof', 'cps')!, greeted: true, confirmed: true }))!.text, /equipe de vendas de Campinas\.$/);
-  assert.match(composeReply(ctx('Quanto custa o curso?', { offer: findOffer('intercorrencias', 'online')!, greeted: true, confirmed: true }))!.text, /equipe de vendas\.$/);
+  assert.equal(composeReply(ctx('Quanto custa o curso?', { offer: findOffer('intercorrencias', 'online')!, greeted: true, confirmed: true }))!.text,
+    'Ótimo! A turma de Intercorrências (online) começa em 01/11 e custa R$ 997 (consultado no ERP às 14:10). Vou passar você para a equipe de vendas.');
   assert.match(composeReply(ctx('Quero saber de cursos', { catalog: CATALOG, greeted: true }))!.text, /^Temos turmas abertas/);
   assert.match(composeReply(ctx('Quero fazer uma reclamação', { greeted: true }))!.text, /^Sinto muito pelo que aconteceu/);
 });
@@ -123,7 +124,7 @@ test('the fallback menu introduces the assistant only in the first message of th
 test('A2 for the online course: date, price and seats from the ERP, and an offer to confirm', () => {
   const r = composeReply(ctx('Intercorrências', { unitOffer: findOffer('intercorrencias', 'online')! }));
   assert.deepEqual(r, {
-    text: 'O curso online de Intercorrências começa em 01/11, R$ 997, 999 vagas. É esse que você procura?',
+    text: 'O curso online de Intercorrências começa em 01/11, R$ 997. É esse que você procura?',
     basedOn: [{ tool: 'get_course_offer', readAt: NOW }], offer: { product: 'intercorrencias', unit: 'online' },
   });
 });
@@ -135,4 +136,22 @@ test('isConfirmation accepts short messages made only of yes-words, and nothing 
 
 test('the online course is named by its name or by "online"', () => {
   for (const text of ['Intercorrências', 'o curso online', 'Intercorrencia']) assert.equal(unitMention(text), 'online', text);
+});
+
+test('an unconfirmed ERP offer carries the offer to confirm, unless the class is full', () => {
+  assert.deepEqual(composeReply(ctx('Quanto custa o curso?', { offer: findOffer('hof', 'rj')! }))!.offer, { product: 'hof', unit: 'rj' });
+  assert.equal(composeReply(ctx('Quanto custa o curso?', { offer: { ...findOffer('hof', 'rj')!, seatsLeft: 0 } }))!.offer, undefined);
+  assert.equal(composeReply(ctx('Quanto custa o curso?', { offer: findOffer('hof', 'rj')!, confirmed: true }))!.offer, undefined);
+});
+
+test('"intercorrência" in the singular is a clinical complaint, the plural names the online course', () => {
+  for (const text of ['Tive uma intercorrência', 'Estou com uma intercorrencia']) {
+    const r = composeReply(ctx(text, { unitOffer: undefined }));
+    assert.equal(classifyMessage(text).intent, 'clinical_question', text);
+    assert.equal(r?.setMode, 'human', text);
+    assert.match(r!.text, /^Olá, Ana! Sinto muito pelo incômodo\./, text);
+    assert.equal(r!.offer, undefined, text);
+  }
+  assert.equal(classifyMessage('Quero o curso de Intercorrências').intent, 'course_purchase');
+  assert.equal(classifyMessage('Intercorrências').intent, 'other');
 });

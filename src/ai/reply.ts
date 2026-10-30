@@ -48,7 +48,10 @@ function offerText(hello: string, o: CourseOffer, now: string, confirmed: boolea
   const source = `(consultado no ERP às ${hhmm(now)})`;
   if (o.seatsLeft <= 0) return `${hello}${where} de ${ddmm(o.nextClass)} está sem vagas ${source}. Quer que eu avise quando abrir a próxima?`;
   const seats = o.seatsLeft === 1 ? '1 vaga' : `${o.seatsLeft} vagas`;
-  const facts = `${hello}${where} começa em ${ddmm(o.nextClass)}, custa R$ ${o.price.toLocaleString('pt-BR')} e tem ${seats} ${source}.`;
+  const price = `R$ ${o.price.toLocaleString('pt-BR')}`;
+  // The online course has no real seat limit: the count would only be noise.
+  const when = o.unit === 'online' ? `começa em ${ddmm(o.nextClass)} e custa ${price}` : `começa em ${ddmm(o.nextClass)}, custa ${price} e tem ${seats}`;
+  const facts = `${hello}${where} ${when} ${source}.`;
   // After a "sim" the reply ends with the hand-off, not with a question a second "sim" would answer.
   return confirmed ? `${facts} Vou passar você para a equipe de vendas${SALES_OF[o.unit] ?? ` de ${o.unit}`}.` : `${facts} Quer garantir a sua?`;
 }
@@ -76,7 +79,7 @@ function unitOfferReply(o: CourseOffer, now: string): Reply {
   if (o.unit === 'online') {
     const course = `O curso online de ${o.name.replace(/\s*\(online\)$/i, '')}`;
     if (o.seatsLeft <= 0) return { text: `${course} de ${ddmm(o.nextClass)} está sem vagas. Quer que eu avise quando abrir a próxima?`, basedOn };
-    return { text: `${course} começa em ${ddmm(o.nextClass)}, R$ ${o.price.toLocaleString('pt-BR')}, ${seats}. É esse que você procura?`, basedOn, offer: { product: o.product, unit: o.unit } };
+    return { text: `${course} começa em ${ddmm(o.nextClass)}, R$ ${o.price.toLocaleString('pt-BR')}. É esse que você procura?`, basedOn, offer: { product: o.product, unit: o.unit } };
   }
   const place = UNIT_SHORT[o.unit] ?? `em ${o.unit}`;
   const where = place.charAt(0).toUpperCase() + place.slice(1);
@@ -118,7 +121,11 @@ export function composeReply(ctx: ReplyContext): Reply | null {
     reply = { text: menu(ctx.greeted), basedOn: [] };
   } else if (c.intent === 'course_purchase') {
     reply = ctx.offer
-      ? { text: offerText(hello, ctx.offer, ctx.now, ctx.confirmed), basedOn: [{ tool: 'get_course_offer', readAt: ctx.now }] }
+      ? {
+        text: offerText(hello, ctx.offer, ctx.now, ctx.confirmed), basedOn: [{ tool: 'get_course_offer', readAt: ctx.now }],
+        // The next "sim" confirms this class (A3); a full class or an already confirmed one offers nothing to confirm.
+        ...(ctx.offer.seatsLeft > 0 && !ctx.confirmed ? { offer: { product: ctx.offer.product, unit: ctx.offer.unit } } : {}),
+      }
       : ctx.catalog
         ? { text: `${hello}${openClassesText(ctx.catalog)}`, basedOn: [{ tool: 'get_course_offer', readAt: ctx.now }] }
         : { text: `${hello}Qual curso você procura e em qual unidade: São Paulo, Rio de Janeiro ou Campinas?`, basedOn: [] };

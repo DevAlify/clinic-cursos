@@ -103,9 +103,9 @@ test('A2/A3 also work for the online course: its name gets the offer from the ER
   const say = typer(app, getDb, PEOPLE.daniel, NUMBERS.cps, 'cps', '2026-10-29T15:00:00-03:00');
   await say('Quero saber de cursos');
   const base = opps(getDb());
-  assert.equal(await say('Intercorrências'), 'O curso online de Intercorrências começa em 01/11, R$ 997, 999 vagas. É esse que você procura?');
+  assert.equal(await say('Intercorrências'), 'O curso online de Intercorrências começa em 01/11, R$ 997. É esse que você procura?');
   assert.equal(opps(getDb()), base, 'an offer alone opens nothing');
-  assert.match((await say('sim'))!, /^Ótimo! A turma de Intercorrências \(online\) começa em 01\/11, custa R\$ 997 e tem 999 vagas \(consultado no ERP às \d\d:\d\d\)\. Vou passar você para a equipe de vendas\.$/);
+  assert.match((await say('sim'))!, /^Ótimo! A turma de Intercorrências \(online\) começa em 01\/11 e custa R\$ 997 \(consultado no ERP às \d\d:\d\d\)\. Vou passar você para a equipe de vendas\.$/);
   assert.deepEqual(allOpportunities(getDb()).slice(base).map((o) => [o.product, o.unit, o.status]), [['intercorrencias', 'online', 'open']]);
 });
 
@@ -237,4 +237,28 @@ test('WAHA simulator: /api/catalog and /api/guide proxy the ERP and the core, an
   }
   const notAnArray = createWahaSimApp({ deliverWebhook: noWebhook, fetch: (async () => Response.json({ error: 'x' })) as typeof fetch });
   assert.deepEqual(await get(notAnArray as unknown as App, '/api/catalog'), []);
+});
+
+test('a complaint with "intercorrência" goes to the clinical team in human mode and offers no course', async () => {
+  const { app, getDb } = createApp({ openFresh: () => openDb() });
+  const say = typer(app, getDb, PEOPLE.daniel, NUMBERS.cps, 'cps', '2026-10-29T15:00:00-03:00');
+  const base = opps(getDb());
+  assert.match((await say('Tive uma intercorrência'))!, /^Olá, Daniel! Sinto muito pelo incômodo\./);
+  assert.equal(routes(getDb()).at(-1), 'clinical-team');
+  const mode = (getDb().prepare('SELECT mode FROM conversations').get()) as { mode: string };
+  assert.equal(mode.mode, 'human');
+  assert.equal(opps(getDb()), base);
+});
+
+test('guide step 2: Ana sends the copied message, then "sim" opens the opportunity once, routes to SP sales and hands off', async () => {
+  const { app, getDb } = createApp({ openFresh: () => openDb() });
+  await runSteps(app, 'ana-whatsapp');
+  assert.match(lastReply(getDb())!, /Quer garantir a sua\?/);
+  const open = () => allOpportunities(getDb()).filter((o) => o.product === 'hof' && o.unit === 'sp' && o.status === 'open').length;
+  const base = [opps(getDb()), open()];
+  const say = typer(app, getDb, { waId: PEOPLE.ana.waId, name: PEOPLE.ana.name }, NUMBERS.sp, 'sp', '2026-10-29T14:30:00-03:00');
+  assert.match((await say('sim'))!, /^Ótimo! A turma de Harmonização Facial em São Paulo começa em 14\/11, custa R\$ 7\.900 e tem 3 vagas \(consultado no ERP às \d\d:\d\d\)\. Vou passar você para a equipe de vendas de São Paulo\.$/);
+  assert.deepEqual([opps(getDb()), open()], base);
+  assert.equal(open(), 1);
+  assert.equal(routes(getDb()).at(-1), 'sales-sp');
 });
