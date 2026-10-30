@@ -30,6 +30,15 @@ const CHANNEL_RULES: [string, RegExp][] = [
   ['tiktok', said('tiktok')], ['youtube', said('youtube')],
 ];
 const PRODUCT_RULES: [string, RegExp][] = [['hof', /\bharmoniza[çc][ãa]o\b/i]];
+const UNIT_RULES: [string, RegExp][] = [
+  ['sp', /\b(?:sp|s[ãa]o paulo)\b/i], ['rj', /\b(?:rj|rio(?: de janeiro)?)\b/i], ['cps', /\b(?:cps|campinas)\b/i],
+];
+const CONFIRMATION = /^\s*(?:sim|isso(?: mesmo)?|(?:[ée] )?essa(?: mesmo| mesma)?|[ée] isso|quero|pode ser|claro|com certeza)\s*[.!]*\s*$/i;
+
+// The unit a person names ("São Paulo", "rio"), or null.
+export const unitMention = (text: string): string | null => UNIT_RULES.find(([, re]) => re.test(text))?.[0] ?? null;
+// A short yes to what the clinic just offered.
+export const isConfirmation = (text: string): boolean => CONFIRMATION.test(text);
 
 // Stand-in for a real model: same input and output contract, so swapping the provider changes only this file.
 export function classifyMessage(text: string): Classification {

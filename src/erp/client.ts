@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { ERP_URL, SECRETS } from '../config.ts';
 import { fetchJson } from '../core/http.ts';
 import type { Fetch } from '../core/types.ts';
-import { findOffer, type CourseOffer } from './catalog.ts';
+import { CATALOG, type CourseOffer } from './catalog.ts';
 
 export interface ErpIo { url?: string; token?: string; fetch?: Fetch }
 export interface Contact { name: string | null; phone: string | null; email: string | null }
@@ -16,13 +16,17 @@ let localOrders = 0;
 const target = (io: ErpIo) => ({ url: io.url ?? ERP_URL, token: io.token ?? SECRETS.erpToken, fetch: io.fetch ?? fetch });
 
 // Price, seats and dates always come from the ERP. Without ERP_URL (tests, verify) the simulated catalog stands in.
-export async function getOffer(product: string, unit: string, io: ErpIo = {}): Promise<CourseOffer | null> {
+export async function getCatalog(io: ErpIo = {}): Promise<CourseOffer[]> {
   const t = target(io);
-  if (!t.url) return findOffer(product, unit);
+  if (!t.url) return CATALOG;
   const body = await fetchJson(t.fetch, `${t.url}/api/catalog`, { headers: { 'x-erp-token': t.token } }, 'ERP', 'ao ler o catálogo');
   const catalog = z.array(offerSchema).safeParse(body);
   if (!catalog.success) throw new Error('ERP devolveu o catálogo num formato inesperado');
-  return catalog.data.find((c) => c.product === product && c.unit === unit) ?? null;
+  return catalog.data;
+}
+
+export async function getOffer(product: string, unit: string, io: ErpIo = {}): Promise<CourseOffer | null> {
+  return (await getCatalog(io)).find((c) => c.product === product && c.unit === unit) ?? null;
 }
 
 // The order carries the opportunity id, so the payment confirmation comes back linked to it.

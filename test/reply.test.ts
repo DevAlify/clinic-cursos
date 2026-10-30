@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { classifyMessage } from '../src/ai/classify.ts';
 import { composeReply, type ReplyContext } from '../src/ai/reply.ts';
 import { originFromWhatsApp, withDeclaredChannel } from '../src/core/origin.ts';
-import { findOffer } from '../src/erp/catalog.ts';
+import { CATALOG, findOffer } from '../src/erp/catalog.ts';
 
 const NOW = '2026-10-29T17:10:00.000Z'; // 14:10 in Brazil
 const cps = { code: 'cps-whatsapp-principal-01', unit: 'cps', product: null, businessNumber: '551930000003' };
@@ -71,4 +71,33 @@ test('patients go to the unit schedule; anything else gets the menu, and an orig
     'Oi! Sou a assistente da Clinic. Você quer saber de cursos, ser paciente modelo ou tirar uma dúvida?');
   const thanks = composeReply(ctx('Vi no insta', { person: { name: 'Daniel Rocha' }, conversation: { mode: 'ai', originAsked: true } }));
   assert.equal(thanks!.text, 'Obrigada por contar, Daniel! Anotei aqui. Posso ajudar com mais alguma coisa?');
+});
+
+test('A1: generic course interest lists the open classes from the catalog, never fixed text', () => {
+  const list = 'Temos turmas abertas de Harmonização Facial em São Paulo (14/11), no Rio (21/11) e em Campinas (28/11), e o curso online de Intercorrências (01/11). Qual te interessa?';
+  const r = composeReply(ctx('Quero saber de cursos', { catalog: CATALOG }));
+  assert.deepEqual(r, { text: `Olá, Ana! ${list}`, basedOn: [{ tool: 'get_course_offer', readAt: NOW }] });
+  // The text follows the catalog it was given: one class fewer, one class fewer in the sentence.
+  assert.doesNotMatch(composeReply(ctx('Saber de Cursos', { catalog: CATALOG.filter((c) => c.unit !== 'rj') }))!.text, /Rio/);
+  const thanks = composeReply(ctx('Vi no Instagram', { catalog: CATALOG, conversation: { mode: 'ai', originAsked: true } }));
+  assert.equal(thanks!.text, `Obrigada por contar, Ana! Anotei aqui. ${list}`);
+});
+
+test('A2: a unit alone gets that unit class with date, price and seats, no greeting, and an offer to confirm', () => {
+  const r = composeReply(ctx('São Paulo', { unitOffer: findOffer('hof', 'sp')! }));
+  assert.deepEqual(r, {
+    text: 'Em São Paulo, a próxima turma é de Harmonização Facial em 14/11, R$ 7.900, 3 vagas. É essa que você procura?',
+    basedOn: [{ tool: 'get_course_offer', readAt: NOW }], offer: { product: 'hof', unit: 'sp' },
+  });
+  assert.match(composeReply(ctx('Rio', { unitOffer: { ...findOffer('hof', 'rj')!, seatsLeft: 1 } }))!.text, /^No Rio, .*, 1 vaga\. É essa/);
+  const full = composeReply(ctx('Campinas', { unitOffer: { ...findOffer('hof', 'cps')!, seatsLeft: 0 } }));
+  assert.match(full!.text, /^Em Campinas, a turma de Harmonização Facial de 28\/11 está sem vagas\./);
+  assert.equal(full!.offer, undefined, 'a full class is not offered for confirmation');
+});
+
+test('A1 to A3 in human mode: the reply is always silent', () => {
+  const human = { mode: 'human' as const, originAsked: true };
+  for (const text of ['Quero saber de cursos', 'Vi no Instagram', 'São Paulo', 'sim']) {
+    assert.equal(composeReply(ctx(text, { conversation: human, catalog: CATALOG, unitOffer: findOffer('hof', 'sp')! })), null);
+  }
 });

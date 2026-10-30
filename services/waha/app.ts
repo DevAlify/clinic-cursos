@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
+import type { Fetch } from '../../src/core/types.ts';
 import { safeEqual } from '../../src/gateway/signature.ts';
 import { wahaEnv } from '../shared/env.ts';
 
@@ -12,6 +13,8 @@ export interface WahaSimDeps {
   deliverWebhook: (rawBody: string, headers: Record<string, string>) => Promise<void>;
   // Opens the core's QR redirect (/r/:code) without following it and returns the Location, or null if the code is unknown.
   scanQr?: (code: string) => Promise<string | null>;
+  // Reaches the ERP (catalog) and the core (guide) for the phone page; inject one in tests.
+  fetch?: Fetch;
 }
 
 // Seen from the lead's phone: 'out' = the lead sent it, 'in' = the clinic's reply arrived.
@@ -39,8 +42,8 @@ export const PERSONAS = [
 ];
 const personaName = (digits: string): string | undefined => PERSONAS.find((p) => phoneKey(p.number) === phoneKey(digits))?.name;
 
-export function createWahaSimApp({ deliverWebhook, scanQr }: WahaSimDeps) {
-  const { apiKey, hmacKey, sessions } = wahaEnv();
+export function createWahaSimApp({ deliverWebhook, scanQr, fetch: io = fetch }: WahaSimDeps) {
+  const { apiKey, hmacKey, sessions, coreUrl, erpUrl } = wahaEnv();
   const phones = new Map<string, PhoneMessage[]>();
   const page = readFileSync(join(import.meta.dirname, 'public', 'index.html'), 'utf8');
 
@@ -61,6 +64,23 @@ export function createWahaSimApp({ deliverWebhook, scanQr }: WahaSimDeps) {
     console.log('waha: conversas da demo reiniciadas');
     return c.json({ ok: true });
   });
+
+  // Same-origin proxies for the page (the ERP and the core live on other ports). A failure is an empty answer, never an error page.
+  const proxy = async (url: string, what: string): Promise<unknown> => {
+    try {
+      const res = await io(url, { signal: AbortSignal.timeout(3000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (e) {
+      console.error(`waha: ${what} indisponível em ${url}: ${e instanceof Error ? e.message : String(e)}`);
+      return undefined;
+    }
+  };
+  app.get('/api/catalog', async (c) => {
+    const body = await proxy(`${erpUrl}/api/catalog`, 'catálogo do ERP');
+    return c.json(Array.isArray(body) ? body : []);
+  });
+  app.get('/api/guide', async (c) => c.json((await proxy(`${coreUrl}/api/guide`, 'guia do core')) ?? null));
 
   app.get('/api/personas', (c) => c.json(PERSONAS));
 

@@ -58,6 +58,7 @@ async function once<T>(key: string, busy: T, run: () => Promise<T>): Promise<T> 
 
 export interface OutgoingMessage {
   personId: string; businessNumber: string; text: string; basedOn: { tool: string; readAt: string }[]; askOrigin: boolean; key: string;
+  offer?: { product: string; unit: Unit };
 }
 type SendResult = { recorded: boolean; seq: number | null; delivered: boolean };
 
@@ -77,6 +78,7 @@ export async function sendMessage(ctx: ToolContext, m: OutgoingMessage): Promise
       personId: m.personId, businessNumber: m.businessNumber, textRef: storePii(ctx.db, 'message', m.text), provider: provider.name,
       externalId: sent.externalId ? hashIdentifier('wa_message', sent.externalId) : null, basedOn: m.basedOn,
       ...(m.askOrigin ? { askOrigin: true } : {}),
+      ...(m.offer ? { offer: m.offer } : {}),
     });
     return { ...r, delivered: sent.externalId !== null };
   });
