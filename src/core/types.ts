@@ -1,7 +1,14 @@
-import type { ENTRY_POINT_STATUSES, EventType, IDENTIFIER_KINDS, LEVELS, Payload, UNITS } from './events.ts';
+import type {
+  CONVERSATION_MODES, ENTRY_POINT_STATUSES, EventType, IDENTIFIER_KINDS, LEVELS, Payload, PROVIDERS, STAGES, UNITS,
+} from './events.ts';
 
 export type Level = (typeof LEVELS)[number];
 export type Unit = (typeof UNITS)[number];
+export type ProviderName = (typeof PROVIDERS)[number];
+export type ConversationMode = (typeof CONVERSATION_MODES)[number];
+export type Stage = (typeof STAGES)[number];
+// Injected wherever the core talks to another system, so tests and verify never touch the network.
+export type Fetch = typeof fetch;
 export type EntryPointStatus = (typeof ENTRY_POINT_STATUSES)[number];
 export type IdentifierKind = (typeof IDENTIFIER_KINDS)[number];
 

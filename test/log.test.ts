@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openDb, resetProjections } from '../src/core/db.ts';
-import { appendEvent, listEvents } from '../src/core/log.ts';
+import { appendEvent, InvalidEventError, listEvents } from '../src/core/log.ts';
 
 const scan = (externalId: string) => ({
   source: 'qr', externalId, type: 'qr_scanned' as const, occurredAt: '2026-10-29T14:00:00-03:00',
@@ -66,4 +66,19 @@ test('resetProjections keeps the log and the vault', () => {
   assert.equal(listEvents(db).length, 1);
   assert.equal((db.prepare('SELECT COUNT(*) AS n FROM pii').get() as { n: number }).n, 1);
   assert.equal((db.prepare('SELECT COUNT(*) AS n FROM scans').get() as { n: number }).n, 0);
+});
+
+test('fractions of up to nine digits are accepted and kept at millisecond precision', () => {
+  const db = openDb();
+  appendEvent(db, { ...scan('s1'), occurredAt: '2026-10-29T10:00:00.123456Z' });
+  appendEvent(db, { ...scan('s2'), occurredAt: '2026-10-29T10:00:00.123456789Z' });
+  assert.deepEqual(listEvents(db).map((e) => e.occurredAt), ['2026-10-29T10:00:00.123Z', '2026-10-29T10:00:00.123Z']);
+  assert.throws(() => appendEvent(db, { ...scan('s3'), occurredAt: '2026-10-29T10:00:00.1234567890Z' }), InvalidEventError);
+});
+
+test('a payload that fails its event schema is an InvalidEventError and nothing is stored', () => {
+  const db = openDb();
+  const bad = { ...scan('s1'), payload: { code: 42 } } as unknown as Parameters<typeof appendEvent>[1];
+  assert.throws(() => appendEvent(db, bad), (err) => err instanceof InvalidEventError && /qr_scanned/.test(err.message));
+  assert.deepEqual(listEvents(db), []);
 });

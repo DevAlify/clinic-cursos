@@ -4,8 +4,12 @@ export const LEVELS = ['observed', 'declared', 'inferred', 'unknown'] as const;
 export const UNITS = ['sp', 'rj', 'cps', 'online'] as const;
 export const ENTRY_POINT_STATUSES = ['auditing', 'released', 'blocked'] as const;
 export const IDENTIFIER_KINDS = ['bsuid', 'phone', 'email', 'erp_student', 'erp_patient'] as const;
+export const PROVIDERS = ['meta', 'waha'] as const;
+export const CONVERSATION_MODES = ['ai', 'human'] as const;
+export const STAGES = ['new', 'qualifying', 'proposal', 'pre_enrollment', 'won', 'lost'] as const;
 
 const unit = z.enum(UNITS);
+const provider = z.enum(PROVIDERS);
 const identifiers = z
   .array(z.object({ kind: z.enum(IDENTIFIER_KINDS), hash: z.string().min(16), piiRef: z.string().nullable() }))
   .min(1);
@@ -32,7 +36,19 @@ export const payloadSchemas = {
   whatsapp_message_received: z.object({
     businessNumber: z.string(), identifiers, displayRef: z.string().nullable(), code: z.string().nullable(),
     referral: z.object({ sourceId: z.string(), sourceType: z.string(), ctwaClid: z.string().nullable() }).nullable(),
+    textRef: z.string().nullable(), provider,
   }),
+  // externalId is a keyed hash of the provider's message id: those ids embed the phone number.
+  whatsapp_message_sent: z.object({
+    personId: z.string(), businessNumber: z.string(), textRef: z.string(), provider, externalId: z.string().nullable(),
+    basedOn: z.array(z.object({ tool: z.string(), readAt: z.string() })),
+    askOrigin: z.boolean().optional(),
+  }),
+  conversation_mode_changed: z.object({
+    personId: z.string(), businessNumber: z.string(), mode: z.enum(CONVERSATION_MODES), reason: z.string(),
+  }),
+  opportunity_stage_changed: z.object({ opportunityId: z.string(), stage: z.enum(STAGES), reason: z.string() }),
+  erp_order_created: z.object({ opportunityId: z.string(), orderId: z.string(), product: z.string(), unit }),
   qr_scanned: z.object({ code: z.string() }),
   erp_person_imported: z.object({
     batch: z.string(), role: z.enum(['patient', 'student']), unit, identifiers, displayRef: z.string().nullable(),

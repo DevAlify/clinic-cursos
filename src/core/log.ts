@@ -7,19 +7,27 @@ export type AppendResult<T extends EventType> =
   | { event: EventRow<T>; duplicate: false }
   | { event: null; duplicate: true };
 
+// The input of an event is wrong (time or payload). The HTTP layer answers it with a 400.
+export class InvalidEventError extends Error {}
+
+// Up to nine fractional digits, as the ISO check at the doors allows; Date.parse keeps the milliseconds.
 function toUtcIso(value: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$/.test(value)) {
-    throw new Error(`data inválida: ${value}`);
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?(Z|[+-]\d{2}:\d{2})$/.test(value)) {
+    throw new InvalidEventError(`data inválida: ${value}`);
   }
   const time = Date.parse(value);
-  if (Number.isNaN(time)) throw new Error(`data inválida: ${value}`);
+  if (Number.isNaN(time)) throw new InvalidEventError(`data inválida: ${value}`);
   return new Date(time).toISOString();
 }
 
 export function appendEvent<T extends EventType>(
   db: Db, input: EventInput<T>, receivedAt = new Date().toISOString(),
 ): AppendResult<T> {
-  const payload = payloadSchemas[input.type].parse(input.payload) as Payload<T>;
+  const checked = payloadSchemas[input.type].safeParse(input.payload);
+  if (!checked.success) {
+    throw new InvalidEventError(`payload inválido para ${input.type}: ${checked.error.issues.map((i) => `${i.path.join('.')} ${i.message}`).join('; ')}`);
+  }
+  const payload = checked.data as Payload<T>;
   const occurredAt = toUtcIso(input.occurredAt);
   const id = randomUUID();
   const inserted = db
