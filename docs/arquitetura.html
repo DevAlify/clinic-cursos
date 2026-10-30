@@ -85,7 +85,7 @@ figcaption { color: var(--muted); font-size: 8pt; line-height: 1.35; margin-top:
   <div class="layer" role="listitem"><div class="name">Integrações</div><div>envio confiável para ERP, Chatwoot, WhatsApp, Meta, Google e RD</div><div class="tech">caixa de saída + fila pg-boss no PostgreSQL</div></div>
   <div class="layer" role="listitem"><div class="name">Experiência</div><div>painel (CRM, Campanhas, Bastidores) e caixa de atendimento das unidades</div><div class="tech">React + Vite; Chatwoot com app de painel</div></div>
   <div class="layer" role="listitem"><div class="name">Dados e análise</div><div>Grande Cérebro: funil, atribuição com regra e versão, investimento, vagas</div><div class="tech">réplica de leitura, Metabase, Python</div></div>
-  <div class="layer" role="listitem"><div class="name">Plataforma</div><div>implantação, segredos, backup, observabilidade, pipeline</div><div class="tech">AWS São Paulo, Docker, Coolify, GitHub Actions, SOPS, pgBackRest, OpenTelemetry</div></div>
+  <div class="layer" role="listitem"><div class="name">Plataforma</div><div>implantação, segredos, backup, observabilidade, pipeline</div><div class="tech">AWS São Paulo, Docker, Coolify, GitHub Actions, SOPS, pgBackRest e backup do RDS, OpenTelemetry</div></div>
 </div>
 
 <div class="answer"><b>Resposta objetiva:</b> um núcleo próprio em TypeScript e PostgreSQL, com o log de eventos no centro, o Chatwoot como caixa de atendimento e o ERP como dono da venda, rodando em São Paulo atrás da Cloudflare e operável por uma pessoa.</div>
@@ -121,8 +121,8 @@ figcaption { color: var(--muted); font-size: 8pt; line-height: 1.35; margin-top:
 <tr><td>Confirmação de webhook</td><td>p95 abaixo de 1 s</td><td>a porta de entrada só valida e grava; o resto vai para a fila</td></tr>
 <tr><td>Primeira resposta da IA</td><td>p95 abaixo de 20 s</td><td>fila dedicada, contexto curto em cache, ERP consultado com tempo limite</td></tr>
 <tr><td>Painel</td><td>p95 abaixo de 500 ms</td><td>projeções prontas no banco, sem cálculo pesado na tela</td></tr>
-<tr><td>Perda máxima de dados (RPO)</td><td>5 min no piloto; segundos na fase de 90 dias</td><td>WAL enviado sem parar ao S3; depois, banco gerenciado com réplica síncrona</td></tr>
-<tr><td>Tempo de recuperação (RTO)</td><td>4 h no piloto; 1 h na fase de 90 dias</td><td>restauração ensaiada todo mês; imagem e configuração versionadas</td></tr>
+<tr><td>Perda máxima de dados (RPO)</td><td>5 min no piloto; na fase de 90 dias, perto de zero em falha de zona e até 5 min em erro lógico</td><td>WAL enviado sem parar ao S3 (pgBackRest); no RDS, réplica síncrona Multi-AZ e recuperação ponto a ponto nativa</td></tr>
+<tr><td>Tempo de recuperação (RTO)</td><td>4 h no piloto; 1 h na fase de 90 dias</td><td>restauração ensaiada todo mês, com a lista de eliminações reaplicada; imagem e configuração versionadas</td></tr>
 <tr><td>LGPD</td><td>dado pessoal só no cofre; dado de saúde fora do marketing</td><td>cofre cifrado por pessoa; apagamento por destruição da chave (seção 9)</td></tr>
 <tr><td>Operação</td><td>uma pessoa mantém</td><td>deploy de um clique, rotina diária de 15 minutos, runbooks (seção 11)</td></tr>
 </table></div>
@@ -253,7 +253,7 @@ figcaption { color: var(--muted); font-size: 8pt; line-height: 1.35; margin-top:
 <path d="M750 209 H786 V417 H810" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#a2)"/>
 </g>
 </svg>
-<figcaption>Visão de contexto e topologia. Nenhum servidor recebe conexão de fora: o cloudflared abre o túnel de dentro para fora. Webhooks entram pela borda com assinatura conferida no núcleo; tudo que sai passa pela caixa de saída do core-worker; o PostgreSQL manda o WAL sem parar para o S3 em São Paulo; o OpenTelemetry Collector envia a telemetria ao serviço de observabilidade (seção 11).</figcaption>
+<figcaption>Visão de contexto e topologia. Nenhum servidor recebe conexão de fora: o cloudflared abre o túnel de dentro para fora. Webhooks entram pela borda com assinatura conferida no núcleo; tudo que sai passa pela caixa de saída do core-worker; nas duas primeiras fases, o PostgreSQL manda o WAL sem parar para o S3 em São Paulo (com o RDS, vale o backup nativo dele); o OpenTelemetry Collector envia a telemetria ao serviço de observabilidade (seção 11).</figcaption>
 </figure>
 
 <h3>Serviços e onde rodam</h3>
@@ -382,7 +382,7 @@ figcaption { color: var(--muted); font-size: 8pt; line-height: 1.35; margin-top:
 <div>
 <ul>
 <li><code>log.events</code>: <code>seq</code>, <code>type</code>, <code>schema</code>, <code>source</code>, <code>external_id</code>, <code>occurred_at</code>, <code>recorded_at</code>, <code>actor</code>, <code>reason</code>, <code>based_on</code>, <code>correlation_id</code>, <code>payload</code> (jsonb, só referências ao cofre). <code>UNIQUE(source, external_id)</code>; gatilho e permissões impedem UPDATE e DELETE.</li>
-<li><code>pii.keys</code> e <code>pii.values</code>: chave de dado por pessoa, cifrada pela chave mestra; valores cifrados e HMAC para busca. Só o papel do cofre lê esse esquema.</li>
+<li><code>pii.keys</code> e <code>pii.values</code>: chave de dado por pessoa, cifrada pela chave mestra; valores cifrados e HMAC para busca. Só o papel do cofre lê esse esquema. Cada eliminação também vai para uma lista só de acréscimo fora do banco (S3 com bloqueio contra exclusão), reaplicada em toda restauração.</li>
 <li><code>app.*</code>: projeções (pessoas, identificadores, papéis, toques, oportunidades, conversas, filas, pontos de entrada, links, leituras de QR, alertas, cobertura).</li>
 <li><code>ops.*</code>: caixa de saída, fila do pg-boss, quarentena, chaves de ferramentas, controle de migrações.</li>
 </ul>
@@ -607,12 +607,12 @@ figcaption { color: var(--muted); font-size: 8pt; line-height: 1.35; margin-top:
 </table></div>
 <ul>
 <li><b>Bases legais por finalidade.</b> Atendimento e matrícula: procedimentos preliminares e execução de contrato (art. 7º, V). Marketing e conversões para anúncios: consentimento (art. 7º, I). Dado de saúde: consentimento específico e destacado (art. 11). Cada consentimento e cada revogação viram evento, e a revogação desliga as automações daquela finalidade.</li>
-<li><b>Direitos do titular.</b> Acesso e portabilidade: exportação gerada do log e do cofre. Correção: evento de correção. Eliminação: destruir a chave da pessoa torna ilegível o que está no banco e nos backups, sem reescrever o log. Prazos do art. 19.</li>
+<li><b>Direitos do titular.</b> Acesso e portabilidade: exportação gerada do log e do cofre. Correção: evento de correção. Eliminação: a chave da pessoa é destruída e os valores apagados, e a base viva fica ilegível na hora, sem reescrever o log. A eliminação entra também na lista fora do banco; toda restauração reaplica essa lista antes de liberar o acesso, e nos backups o dado some quando a cópia expira (até 35 dias). Prazos do art. 19.</li>
 <li><b>Transferência internacional.</b> Meta, Google e Anthropic processam fora do Brasil (a Claude API só oferece inferência nos EUA ou global): cláusulas-padrão contratuais da ANPD (Resolução CD/ANPD nº 19/2024) e envio do mínimo necessário (art. 33). Servidores, banco e backups ficam em São Paulo.</li>
 <li><b>Retenção (proposta para o jurídico).</b> Lead sem matrícula: 24 meses após o último contato; aluno e paciente: prazo do contrato mais o prazo legal; logs técnicos: 90 dias. Expirado o prazo, a chave da pessoa é destruída.</li>
 <li><b>Relatório de impacto.</b> RIPD antes da fase 2 para dado de saúde e uso de IA, com o encarregado de dados.</li>
 </ul>
-<div class="answer"><b>Resposta objetiva:</b> o dado pessoal mora num cofre cifrado por pessoa, sai só com base legal e no mínimo, e apagar uma pessoa é destruir a chave dela, inclusive nos backups.</div>
+<div class="answer"><b>Resposta objetiva:</b> o dado pessoal mora num cofre cifrado por pessoa, sai só com base legal e no mínimo, e apagar uma pessoa é destruir a chave dela: na hora na base viva, nos backups quando a cópia expira, e nenhuma restauração a traz de volta.</div>
 
 <h2>10. Infraestrutura e implantação</h2>
 <h3>Topologia por fase</h3>
@@ -639,10 +639,10 @@ figcaption { color: var(--muted); font-size: 8pt; line-height: 1.35; margin-top:
 
 <h3>Backup e recuperação</h3>
 <ul>
-<li><b>Núcleo:</b> pgBackRest com WAL contínuo, cópia completa semanal e diferencial diária no S3 em São Paulo, cifrado; retenção de 35 dias com versionamento do bucket.</li>
+<li><b>Núcleo, fases de 2 semanas e 30 dias</b> (PostgreSQL no servidor): pgBackRest com WAL contínuo, cópia completa semanal e diferencial diária no S3 em São Paulo, cifrada no cliente (aes-256-cbc); retenção de 35 dias.</li>
 <li><b>Chatwoot:</b> cópia diária do banco e anexos no mesmo S3.</li>
-<li><b>Ensaio:</b> todo mês, restauração cronometrada no staging, com <code>verify</code> e refazimento das projeções. Sem ensaio, o backup não conta como existente.</li>
-<li><b>Fase de 90 dias:</b> banco gerenciado com réplica síncrona e recuperação ponto a ponto; o pgBackRest continua como segunda cópia, fora do provedor do banco.</li>
+<li><b>Núcleo, fase de 90 dias</b> (RDS): backup automático do RDS com recuperação ponto a ponto e 35 dias de retenção, mais a réplica síncrona Multi-AZ. O pgBackRest sai, porque o RDS não dá acesso ao servidor do banco. A segunda cópia é uma exportação lógica diária (<code>pg_dump</code>) num bucket de outra conta AWS, com bloqueio contra exclusão: protege contra erro ou invasão da conta principal, não contra a AWS inteira.</li>
+<li><b>Ensaio:</b> todo mês, restauração cronometrada no staging (pelo pgBackRest; depois, pela recuperação ponto a ponto do RDS numa instância temporária), com a lista de eliminações reaplicada, <code>verify</code> e refazimento das projeções. Sem ensaio, o backup não conta como existente.</li>
 </ul>
 <div class="answer"><b>Resposta objetiva:</b> um servidor no começo, dois servidores e banco gerenciado nas três unidades; tudo versionado, com deploy aprovado em um clique, volta à versão anterior em minutos e restauração ensaiada todo mês.</div>
 
@@ -689,7 +689,7 @@ figcaption { color: var(--muted); font-size: 8pt; line-height: 1.35; margin-top:
 <tr><td>Servidor de atendimento (Chatwoot)</td><td class="n">—</td><td class="n">84,00</td><td>16 GB e 4 vCPU; o Chatwoot pede no mínimo 4 vCPU e 4 GB</td></tr>
 <tr><td>Staging e verificação externa</td><td class="n">24,00</td><td class="n">24,00</td><td>Lightsail 4 GB e 2 vCPU</td></tr>
 <tr><td>PostgreSQL gerenciado (RDS, São Paulo)</td><td class="n">—</td><td class="n">222,65</td><td>db.t4g.medium Multi-AZ a US$ 0,275/h × 730 h, mais 50 GB gp3 a US$ 0,438</td></tr>
-<tr><td>S3 em São Paulo (backups e anexos)</td><td class="n">4,05</td><td class="n">8,10</td><td>100 GB e 200 GB a US$ 0,0405 por GB-mês</td></tr>
+<tr><td>S3 em São Paulo (backups, anexos, exportação lógica)</td><td class="n">4,05</td><td class="n">8,10</td><td>100 GB e 200 GB a US$ 0,0405 por GB-mês; o backup do RDS acima da cota gratuita custa US$ 0,095 por GB-mês</td></tr>
 <tr><td>Cloudflare (Free e Zero Trust Free)</td><td class="n">0,00</td><td class="n">0,00</td><td>DNS, CDN, TLS, DDoS, WAF gratuito; Access e Tunnel até 50 usuários</td></tr>
 <tr><td>Observabilidade (Grafana Cloud Free, Sentry Developer)</td><td class="n">0,00</td><td class="n">0,00</td><td>cabe nos limites gratuitos (seção 11)</td></tr>
 <tr><td>Licenças (Chatwoot Community, Coolify, Metabase OSS, pgBackRest, pg-boss)</td><td class="n">0,00</td><td class="n">0,00</td><td>código aberto</td></tr>
@@ -731,7 +731,7 @@ figcaption { color: var(--muted); font-size: 8pt; line-height: 1.35; margin-top:
 <tr><td>AWS em São Paulo: Lightsail com Coolify, S3 e, nas três unidades, RDS</td><td>Hostinger no Brasil (mais barata no piloto); contêineres gerenciados (ECS)</td><td>um provedor e uma região; rede privada até o banco; dados no Brasil; sem migração no meio do caminho</td><td>se o custo pesar mais que a operação, ou se a equipe crescer</td></tr>
 <tr><td>Chatwoot Community, fork MIT</td><td>construir a caixa; Chatwoot pago</td><td>caixa pronta em dias; recursos pagos não são necessários</td><td>se SSO nativo ou SLA virarem exigência</td></tr>
 <tr><td>Claude API com ferramentas próprias e MCP</td><td>plataforma de bot fechada</td><td>ferramentas, histórico e gabarito ficam com a Clinic</td><td>a cada modelo novo, pelo gabarito</td></tr>
-<tr><td>Cofre com chave por pessoa</td><td>apagar linhas</td><td>apaga também nos backups sem reescrever o log</td><td>—</td></tr>
+<tr><td>Cofre com chave por pessoa e lista de eliminações fora do banco</td><td>apagar linhas</td><td>apaga na base viva sem reescrever o log; restauração não traz de volta quem foi eliminado; nos backups, some quando a cópia expira</td><td>se o jurídico exigir apagamento imediato também nos backups: chaves num cofre externo com backup próprio de retenção curta</td></tr>
 <tr><td>Cloudflare Access para a equipe</td><td>construir login</td><td>SSO e MFA sem código; uma porta só</td><td>mais de 50 usuários (o plano gratuito vai até 50; depois, US$ 7 por usuário por mês)</td></tr>
 </table></div>
 <div class="wrap"><table>
