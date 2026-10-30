@@ -17,7 +17,7 @@ São **três serviços locais que imitam máquinas diferentes da operação** (o
 ```bash
 npm install                       # instala os pacotes (use npm ci para seguir o lockfile à risca)
 npm run verify                    # roda os sete cenários do zero e mostra esperado × obtido
-npm run demo                      # constrói o produto e sobe os três serviços (portas 3000, 3100 e 3200)
+npm run demo                      # constrói o produto e sobe os três serviços (portas 3000, 3100 e 3200, escutando só em `127.0.0.1`)
 npm run replay -- --window 14     # refaz a atribuição com janela de 14 dias e mostra o que mudaria
 docker compose up --build         # plano B, sem Node na máquina; um contêiner por serviço
 ```
@@ -133,7 +133,7 @@ Os termos entre parênteses são os níveis de certeza da origem: `observed` (ob
 | Falha escolhida: a LP de Campinas perde as UTMs | Felipe, Gabriela e Helena | os três leads chegam com canal Google observado e campanha desconhecida; no terceiro, o alerta dispara com ação e responsável, o ponto vai para "em auditoria" e só o dono o libera, depois de um lead de teste |
 | Atendimento: a IA responde com dado do ERP, uma pessoa assume e o pedido vai ao ERP | Ana, Daniel e Helena | a IA responde com vagas e preço do ERP e pergunta a origem de quem não a trouxe; a dúvida clínica da Helena vai para a equipe, sem resposta de mérito; a atendente assume a conversa, avança a etapa e a pré-matrícula vira pedido no ERP com o id da oportunidade |
 
-Além dos sete cenários, `verify` confere três extras: o log não guarda dado pessoal em claro e recusa alteração; refazer as projeções a partir do log dá o mesmo estado; e uma regra nova de atribuição (janela de 14 dias) muda só o que deve mudar.
+Além dos sete cenários, `verify` confere três extras: o log não guarda dado pessoal em claro (sem dado pessoal em claro; identificadores com hash de chave) e recusa alteração; refazer as projeções a partir do log dá o mesmo estado; e uma regra nova de atribuição (janela de 14 dias) muda só o que deve mudar.
 
 ## O que é real e o que é simulado
 
@@ -173,7 +173,6 @@ Versões exatas, como estão em `package.json` e `web/package.json`.
 | clsx, tailwind-merge | 2.1.1, 3.7.0 | junção de classes CSS |
 | tw-animate-css | 1.4.0 | animações dos componentes shadcn |
 | lucide-react | 1.64.0 | ícones |
-| @fontsource-variable/geist | 5.3.0 | fonte da interface |
 
 Testes usam o `node:test`, que já vem no Node.
 
@@ -188,6 +187,7 @@ Tudo é configurado por variáveis de ambiente, com os valores padrão de demons
 | Variável | Valor padrão | Uso |
 |---|---|---|
 | `WHATSAPP_PROVIDER` | `waha` | provedor de WhatsApp: `waha` ou `meta` |
+| `HOST` | `127.0.0.1` | endereço de escuta dos três serviços (só esta máquina). No compose vale `0.0.0.0` dentro dos contêineres, e as portas são publicadas só em `127.0.0.1`. Não use `0.0.0.0` fora de um contêiner |
 | `CORE_PORT`, `ERP_PORT`, `WAHA_PORT` | `3000`, `3100`, `3200` | portas dos três serviços |
 | `CORE_URL`, `ERP_URL`, `WAHA_URL` | `http://localhost:3000`, `:3100`, `:3200` (no `npm run demo` e no compose) | como um serviço encontra o outro; o `core` sozinho (testes, `verify`) roda com `ERP_URL` e `WAHA_URL` vazios, sem rede |
 | `ERP_TOKEN` | `demo-erp-token` | autentica o ERP (cabeçalho `x-erp-token`), nos dois sentidos |
@@ -207,7 +207,14 @@ A demo roda na sua máquina e deixa algumas portas abertas de propósito, para o
 - `/api/reset`, `/api/replay` e `/api/simulate/*` não têm autenticação, nem `/api/conversations/*`, que devolve o texto das conversas (inclusive uma queixa de saúde fictícia, dado sensível pela LGPD);
 - as páginas e as leituras do ERP e do simulador do WAHA não têm autenticação (só a criação de pedidos do ERP e a rota de envio do WAHA pedem chave), e "Confirmar pagamento" é um botão aberto;
 - o ERP e o celular do lead guardam o estado em memória ou num arquivo que recomeça do zero a cada subida, e `/api/reset` do core não zera o ERP (reinicie a demo para repetir o roteiro);
-- os segredos são os valores padrão de demonstração, lidos de variáveis de ambiente.
+- os segredos são os valores padrão de demonstração, lidos de variáveis de ambiente;
+- nenhuma rota tem autenticação, e a marca `test: true` do formulário é pública: qualquer chamador pode mandar um lead de teste (é ela que libera um ponto em auditoria);
+- não há limite de requisições nem cabeçalhos de segurança (CSP, HSTS e afins);
+- o estado de saúde dos pontos de entrada aparece no log e em `/api/state`, sem autenticação;
+- `/api/reset` apaga o banco do core e recomeça do zero;
+- os números da demo (vagas, preços, gasto de campanha, contagens) são inventados;
+- privacidade: sem dado pessoal em claro no log; os identificadores guardam um hash de chave (HMAC com `PII_HASH_KEY`), que não é anonimização: quem tem a chave e o telefone refaz o hash. O cofre guarda o dado pessoal em claro, no banco local, sem criptografia;
+- por padrão os serviços escutam só em `127.0.0.1` (`HOST`), e o compose publica as portas só nesse endereço; isso protege a demo na máquina, mas não substitui autenticação.
 
 Antes de qualquer uso real, isso ficaria protegido: autenticação nas rotas, chamadas internas assinadas (em vez de papel autodeclarado e hora escolhida por quem chama) e segredos num gerenciador de segredos.
 

@@ -26,7 +26,7 @@ Contagem extra, a partir do primeiro commit (29/10 11:36): cerca de 4h40 de trab
 | Claude Code, Opus 5.5 | orquestração, desenho, spec, plano, decisões, revisão do documento | cada seção do desenho foi aprovada por mim; li o PDF final página por página e as capturas de tela |
 | Claude Code, Fable 5.1 | correção do alvo da demo (sistema central em uso) e Plano v2 | aprovei a redefinição antes da execução |
 | Subagentes Claude Sonnet 5.5 | implementação (plano B quando o Codex bateu no limite), documento, README, produto em React, integração, revisões cruzadas e revisão de segurança | relatórios de cada tarefa; resultados de teste e `verify` conferidos |
-| Subagente Claude Opus 5.5 | implementação do sistema central (mensagens, provedores, agente, pipeline) e revisão final (tech-lead) | decisões fora do contrato listadas no relatório e aceitas uma a uma |
+| Subagente Claude Opus 5.5 | implementação do sistema central (mensagens, provedores, agente, pipeline) e revisão do núcleo (tech-lead); a revisão final desta entrega ainda vem antes do merge | decisões fora do contrato listadas no relatório e aceitas uma a uma |
 | Codex (gpt-6.1-sol) | implementação do núcleo (log, cofre, identidade, origem, regras) e revisões cruzadas | revisão cruzada por outro fornecedor em cada entrega, até o limite de uso |
 | Codex (gpt-6-astra) | mockup visual | revisão de UX independente antes da minha aprovação |
 
@@ -47,7 +47,7 @@ Todas com data, em `docs/processo/pesquisa/`:
 
 | Comando | Resultado |
 |---|---|
-| `npm test` | 109 testes passando |
+| `npm test` | 115 testes passando |
 | `npm run verify` | 36 de 36 verificações passaram |
 | `npm run replay -- --window 14` | só a atribuição da Carla muda (QR observado → desconhecida) |
 | `npm run typecheck` | limpo na raiz e no web |
@@ -56,11 +56,11 @@ Todas com data, em `docs/processo/pesquisa/`:
 | `docker compose up --build` | três contêineres; o mesmo circuito funcionou entre eles |
 | `npx npm@11 ci` em clone limpo | instalação ok no Windows com o `.npmrc` |
 | Revisão de interface (diretrizes da Vercel) | 5 correções de acessibilidade aplicadas |
-| Revisões cruzadas e final | base, núcleo (log, cofre, identidade, origem, regras): revisão cruzada aprovada e tech-lead; demais entregas: revisão de segurança e tech-lead (ver pendências) |
+| Revisões cruzadas e final | base, núcleo (log, cofre, identidade, origem, regras): revisão cruzada aprovada e tech-lead; demais entregas: revisão de segurança feita, tech-lead ainda por fazer antes do merge (ver pendências) |
 
 ## Pendências e o que ficou de fora
 
-1. **Revisão cruzada pelo Codex** das entregas feitas depois das 15:30 de 29/10 (projeções, ferramentas, porta HTTP, cenários, serviços, sistema central, produto e documento) ficou pendente: o Codex atingiu o limite de uso. Elas passaram pela revisão de segurança e pela revisão final do tech-lead.
+1. **Revisão cruzada pelo Codex** das entregas feitas depois das 15:30 de 29/10 (projeções, ferramentas, porta HTTP, cenários, serviços, sistema central, produto e documento) ficou pendente: o Codex atingiu o limite de uso. Elas passaram pela revisão de segurança (APPROVE_WITH_NOTES, com as correções aplicadas); a revisão final do tech-lead é a etapa antes do merge.
 2. **Fora da demo, descrito no documento:** troca de número no WhatsApp, entrada de vendas da Hotmart, consentimento por finalidade, envio a RD, Meta e Google com filtro pela classe do dado, apagamento definitivo de pessoa (com chave por pessoa), confirmação da conciliação em um clique, tela de fusão de fichas, busca da campanha pelo gclid, modelo de IA real.
 3. **Limites da demo, declarados no README:** sem autenticação nas rotas; o cabeçalho `x-occurred-at` deixa a simulação escolher o horário; `/tools` confia no `x-actor`; segredos de demonstração; com a chave HMAC do WAHA vazia, qualquer corpo é aceito; o webhook espera a reação da IA (em produção, gravar, responder 200 e reagir por fila); um único `META_PHONE_NUMBER_ID`.
 4. **Exceções de dependência:** class-variance-authority 0.7.1 (exigida pelos componentes do shadcn, sem versão estável publicada); 3 alertas baixos do `npm audit` dentro da ferramenta de linha de comando do shadcn, fora do código servido.
