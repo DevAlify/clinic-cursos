@@ -12,3 +12,6 @@ export function journeyReached({ messages, opportunities }: JourneyInput): numbe
   if (messages.some((m) => m.direction === 'out')) return 2;
   return opportunities.length > 0 ? 1 : 0;
 }
+
+// "Abrir oportunidade" is offered while the person has no open one; won and lost ones stay in the history.
+export const hasOpenOpportunity = (opportunities: { status: string }[]): boolean => opportunities.some((o) => o.status === 'open');

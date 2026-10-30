@@ -6,6 +6,7 @@ import { ActionError } from '@/components/states';
 import { advanceOpportunity, requestEnrollment, type ConversationDetail, type Stage, type V2Opportunity } from '@/lib/api.ts';
 import { productLabel, roleLabel, stageLabel, unitLabel } from '@/lib/format.ts';
 import { useAction } from '@/lib/hooks.ts';
+import { hasOpenOpportunity } from '@/lib/journey.ts';
 
 // "Avançar etapa" walks new, qualifying and proposal; from proposal on, the ERP order is the next move.
 const NEXT: Partial<Record<Stage, Stage>> = { new: 'qualifying', qualifying: 'proposal' };
@@ -61,13 +62,14 @@ export function SideCard({ detail, onChanged }: { detail: ConversationDetail; on
       </section>
       <section>
         <Heading>Oportunidades</Heading>
-        {detail.opportunities.length === 0 ? (
+        {!hasOpenOpportunity(detail.opportunities) && (
           <>
             <p className="text-sm text-muted-foreground">Nenhuma oportunidade aberta para esta pessoa.</p>
             <OpenOpportunity detail={detail} onChanged={onChanged} />
           </>
-        ) : (
-          <div className="space-y-3">{detail.opportunities.map((o) => <Opportunity key={o.id} o={o} onChanged={onChanged} />)}</div>
+        )}
+        {detail.opportunities.length > 0 && (
+          <div className={`space-y-3${hasOpenOpportunity(detail.opportunities) ? '' : ' mt-3'}`}>{detail.opportunities.map((o) => <Opportunity key={o.id} o={o} onChanged={onChanged} />)}</div>
         )}
       </section>
       <section>
