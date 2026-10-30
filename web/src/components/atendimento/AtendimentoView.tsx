@@ -22,7 +22,7 @@ export function AtendimentoView() {
   }
 
   return (
-    <div className="grid h-full grid-cols-[22.5rem_minmax(0,1fr)]">
+    <div className="grid h-full grid-cols-[22.5rem_minmax(0,1fr)] group-data-[guide=open]/guide:grid-cols-[14.375rem_minmax(0,1fr)]">
       <aside aria-label="Conversas" className="flex min-h-0 flex-col border-r bg-card">
         <div className="shrink-0 border-b px-4 py-3">
           <h1 className="text-lg font-semibold tracking-tight">Conversas</h1>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { ResetControl } from '@/components/ResetControl';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ActionError, Resource } from '@/components/states';
@@ -47,7 +48,8 @@ export function ScriptPanel({ steps, state, refresh }: { steps: Poll<StepView[]>
   const restart = async () => {
     setPlaying(false);
     setWho(ALL);
-    await action.run(async () => { await reset(); await refresh(); });
+    await reset();
+    await refresh();
   };
 
   return (
@@ -57,12 +59,12 @@ export function ScriptPanel({ steps, state, refresh }: { steps: Poll<StepView[]>
         <p className="mt-0.5 text-meta text-muted-foreground">10 e 29 de outubro de 2026 · {list.length} acontecimentos</p>
       </div>
       <div className="shrink-0 border-b bg-surface-soft px-3.5 pt-3 pb-2">
-        <div className="flex gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
           <Button size="lg" className="h-9 px-3" disabled={!next || playing || action.busy} onClick={() => { if (next) void runStep(next.id); }}>Próximo passo</Button>
           <Button size="lg" variant="outline" className="h-9 px-3" disabled={!next && !playing} aria-pressed={playing} onClick={() => setPlaying((p) => !p)}>
             {playing ? 'Pausar' : 'Passar tudo'}
           </Button>
-          <Button size="lg" variant="outline" className="h-9 px-3" disabled={action.busy} onClick={() => void restart()}>Recomeçar</Button>
+          <ResetControl className="h-9 px-3" onReset={restart} />
         </div>
         <div className="mt-2.5 flex items-center justify-between text-meta text-muted-foreground">
           <span>{done}/{list.length} passos feitos</span>

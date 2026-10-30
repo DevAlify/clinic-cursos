@@ -14,6 +14,7 @@ const STAGE_LABEL: Record<Stage, string> = {
   new: 'Novo', qualifying: 'Em qualificação', proposal: 'Proposta', pre_enrollment: 'Pré-matrícula', won: 'Ganha', lost: 'Perdida',
 };
 
+const UNIT_FULL_LABEL: Record<string, string> = { sp: 'São Paulo', rj: 'Rio de Janeiro', cps: 'Campinas', online: 'Online' };
 const UNIT_LABEL: Record<string, string> = { sp: 'SP', rj: 'Rio', cps: 'Campinas', online: 'Online' };
 const PRODUCT_LABEL: Record<string, string> = { hof: 'Harmonização Facial', cursos: 'Cursos' };
 const CHANNEL_LABEL: Record<string, string> = {
@@ -29,6 +30,9 @@ export const levelLabel = (level: Level): string => LEVEL_LABEL[level];
 export const queueLabel = (id: string): string => QUEUE_LABEL[id] ?? id;
 export const stageLabel = (stage: string): string => STAGE_LABEL[stage as Stage] ?? stage;
 export const unitLabel = (unit: string): string => UNIT_LABEL[unit] ?? unit;
+export const unitFullLabel = (unit: string): string => UNIT_FULL_LABEL[unit] ?? unit;
+// '2026-11-14' to '14/11'
+export const shortDate = (iso: string): string => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 export const productLabel = (product: string): string => PRODUCT_LABEL[product] ?? product;
 export const channelLabel = (channel: string | null): string => (channel === null ? 'Não identificado' : (CHANNEL_LABEL[channel] ?? channel));
 export const campaignLabel = (campaign: string | null): string => (campaign === null ? 'Não identificada' : (CAMPAIGN_LABEL[campaign] ?? campaign));

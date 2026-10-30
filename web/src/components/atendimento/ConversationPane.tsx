@@ -31,7 +31,7 @@ function StepBar({ reached }: { reached: number }) {
 
 function PaneSkeleton() {
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_22.5rem]" aria-busy="true" aria-label="Carregando a conversa">
+    <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_22.5rem] group-data-[guide=open]/guide:grid-cols-[minmax(0,1fr)_18.75rem]" aria-busy="true" aria-label="Carregando a conversa">
       <div className="space-y-4 p-6"><Skeleton className="h-12 w-3/5" /><Skeleton className="ml-auto h-16 w-3/5" /><Skeleton className="h-12 w-2/5" /><Skeleton className="ml-auto h-20 w-3/5" /></div>
       <div className="space-y-4 border-l p-4"><Skeleton className="h-8 w-1/2" /><Skeleton className="h-48" /><Skeleton className="h-32" /></div>
     </div>
@@ -47,7 +47,7 @@ export function ConversationPane({ personId, businessNumber, onChanged }: { pers
         {(d: ConversationDetail) => (
           <>
             <StepBar reached={journeyReached(d)} />
-            <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_22.5rem]">
+            <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_22.5rem] group-data-[guide=open]/guide:grid-cols-[minmax(0,1fr)_18.75rem]">
               <Thread detail={d} onChanged={changed} />
               <SideCard detail={d} onChanged={changed} />
             </div>
