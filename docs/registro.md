@@ -21,6 +21,8 @@ Como medi: nos registros da sessão de trabalho, conto só os trechos com ativid
 | 9 | 30/10 06:14–09:01 | 0h24 | revisões do guia e do documento (Codex e tech-lead), documento v3, merge |
 | | | **5h21** | |
 
+Depois do fechamento, entre 09:01 e 11:47 de 30/10, fiz o documento complementar de arquitetura (`docs/arquitetura.pdf`, fora do que o PDF pede, com revisão do Codex) e preparei a apresentação: mais 0h41 de tempo dedicado, medido do mesmo jeito. Com o complementar, o total é 6h02.
+
 ## IA e ferramentas usadas
 
 | Ferramenta | Papel | O que conferi à mão |
