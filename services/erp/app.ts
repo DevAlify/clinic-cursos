@@ -113,7 +113,8 @@ export function createErpApp({ notifyCore, db = new Database(':memory:') }: ErpD
   app.post('/api/reset', async (c) => {
     if (!safeEqual(c.req.header('x-erp-token') ?? '', token)) return c.json({ error: 'token inválido' }, 401);
     // Finish active notices before reusing order ids, including their finally callbacks.
-    await Promise.all([...notifications.values()]);
+    // Loop: the retry timer or /pay may start a new notice while we wait.
+    while (notifications.size) await Promise.all([...notifications.values()]);
     db.transaction(() => {
       db.prepare('DELETE FROM orders').run();
       db.prepare("DELETE FROM sqlite_sequence WHERE name = 'orders'").run();

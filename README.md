@@ -205,14 +205,14 @@ A demo roda na sua máquina e deixa algumas portas abertas de propósito, para o
 - o cabeçalho `x-occurred-at` deixa o chamador escolher a hora gravada do evento (é como a simulação mantém seu relógio fictício; só aceita data ISO 8601 com fuso);
 - `/tools/*` confia no cabeçalho `x-actor` para saber o papel de quem chama;
 - `/api/reset`, `/api/replay` e `/api/simulate/*` não têm autenticação, nem `/api/conversations/*`, que devolve o texto das conversas (inclusive uma queixa de saúde fictícia, dado sensível pela LGPD);
-- as páginas e as leituras do ERP e do simulador do WAHA não têm autenticação (só a criação de pedidos do ERP e a rota de envio do WAHA pedem chave), e "Confirmar pagamento" é um botão aberto;
-- o ERP e o celular do lead guardam o estado em memória ou num arquivo que recomeça do zero a cada subida, e `/api/reset` do core não zera o ERP (reinicie a demo para repetir o roteiro);
+- as páginas e as leituras do ERP e do simulador do WAHA não têm autenticação (só a criação de pedidos e o reset do ERP, e o envio e o reset do WAHA, pedem chave), e "Confirmar pagamento" é um botão aberto;
+- o ERP e o celular do lead guardam o estado em memória ou num arquivo que recomeça do zero a cada subida;
 - os atalhos de ERP e celular no produto usam as portas padrão 3100 e 3200; mudar `ERP_PORT` ou `WAHA_PORT` não atualiza esses atalhos;
 - os segredos são os valores padrão de demonstração, lidos de variáveis de ambiente;
 - nenhuma rota tem autenticação, e a marca `test: true` do formulário é pública: qualquer chamador pode mandar um lead de teste (é ela que libera um ponto em auditoria);
 - não há limite de requisições nem cabeçalhos de segurança (CSP, HSTS e afins);
 - o estado de saúde dos pontos de entrada aparece no log e em `/api/state`, sem autenticação;
-- `/api/reset` apaga o banco do core e recomeça do zero;
+- `/api/reset` ("Recomeçar") apaga o banco do core e também zera o ERP e o celular do lead (pela chave de cada um), para o roteiro poder ser repetido; se um deles não responder, o core recomeça assim mesmo e diz qual falhou;
 - os números da demo (vagas, preços, gasto de campanha, contagens) são inventados;
 - privacidade: sem dado pessoal em claro no log; os identificadores guardam um hash de chave (HMAC com `PII_HASH_KEY`), que não é anonimização: quem tem a chave e o telefone refaz o hash. O cofre guarda o dado pessoal em claro, no banco local, sem criptografia;
 - por padrão os serviços escutam só em `127.0.0.1` (`HOST`), e o compose publica as portas só nesse endereço; isso protege a demo na máquina, mas não substitui autenticação.
