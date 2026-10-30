@@ -58,6 +58,7 @@ async function once<T>(key: string, busy: T, run: () => Promise<T>): Promise<T> 
 
 export interface OutgoingMessage {
   personId: string; businessNumber: string; text: string; basedOn: { tool: string; readAt: string }[]; askOrigin: boolean; key: string;
+  offer?: { product: string; unit: Unit };
 }
 type SendResult = { recorded: boolean; seq: number | null; delivered: boolean };
 
@@ -77,6 +78,7 @@ export async function sendMessage(ctx: ToolContext, m: OutgoingMessage): Promise
       personId: m.personId, businessNumber: m.businessNumber, textRef: storePii(ctx.db, 'message', m.text), provider: provider.name,
       externalId: sent.externalId ? hashIdentifier('wa_message', sent.externalId) : null, basedOn: m.basedOn,
       ...(m.askOrigin ? { askOrigin: true } : {}),
+      ...(m.offer ? { offer: m.offer } : {}),
     });
     return { ...r, delivered: sent.externalId !== null };
   });
@@ -125,7 +127,7 @@ export const tools: Record<string, ToolDef> = {
     kind: 'action', roles: ['ai', 'attendant'], approval: 'auto_above_confidence',
     input: z.object({ personId: z.string(), product: z.string(), unit, confidence, triggerSeq: z.number().int() }),
     run: (ctx, i: { personId: string; product: string; unit: 'sp' | 'rj' | 'cps' | 'online'; confidence: number | null; triggerSeq: number }) => {
-      const r = act(ctx, 'interest_declared', `interest:${i.triggerSeq}:${roleOf(ctx.actor)}`, { personId: i.personId, product: i.product, unit: i.unit, confidence: i.confidence });
+      const r = act(ctx, 'interest_declared', `interest:${i.triggerSeq}:${roleOf(ctx.actor)}:${i.product}:${i.unit}`, { personId: i.personId, product: i.product, unit: i.unit, confidence: i.confidence });
       return { ...r, opportunityId: findOpenOpportunity(ctx.db, i.personId, i.product, i.unit)?.id ?? null };
     },
   },

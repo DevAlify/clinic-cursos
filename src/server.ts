@@ -11,10 +11,12 @@ import type { Db } from './core/db.ts';
 import type { ApplyResult } from './core/apply.ts';
 import { ingest } from './core/ingest.ts';
 import { InvalidEventError } from './core/log.ts';
+import { getGuide } from './core/guide.ts';
 import { getLink } from './core/queries.ts';
 import { previewRules, rebuild } from './core/replay.ts';
 import { getCampaigns, getConversationDetail, getPipeline, getState, listConversations } from './core/state.ts';
 import type { Fetch, ProviderName, Rules } from './core/types.ts';
+import { getCatalog } from './erp/client.ts';
 import { erpBodySchema, parseErp } from './gateway/erp.ts';
 import { formBodySchema, parseForm } from './gateway/form.ts';
 import { generateLink, linkRequestSchema } from './gateway/links.ts';
@@ -23,7 +25,8 @@ import { getProvider } from './providers/whatsapp/index.ts';
 import { callTool } from './tools/registry.ts';
 
 // fetch reaches the ERP and the WhatsApp provider; inject one to run the circuit in process.
-export interface AppOptions { openFresh: () => Db; rules?: Rules; fetch?: Fetch }
+// erpUrl overrides ERP_URL for the catalog route (tests); empty means offline.
+export interface AppOptions { openFresh: () => Db; rules?: Rules; fetch?: Fetch; erpUrl?: string }
 
 const isoTime = z.iso.datetime({ offset: true });
 
@@ -116,6 +119,16 @@ export function createApp(opts: AppOptions) {
     const detail = getConversationDetail(db, c.req.param('personId'), c.req.param('businessNumber'));
     return detail ? c.json(detail) : c.json({ error: 'conversa não encontrada' }, 404);
   });
+  // Same shape as the ERP's own catalog, read through the ERP client (the local catalog when offline).
+  app.get('/api/catalog', async (c) => {
+    try {
+      return c.json(await getCatalog({ fetch: io, ...(opts.erpUrl !== undefined ? { url: opts.erpUrl } : {}) }));
+    } catch (err) {
+      console.error(`core: catálogo indisponível: ${err instanceof Error ? err.message : String(err)}`);
+      return c.json({ error: err instanceof Error ? err.message : 'catálogo indisponível' }, 502);
+    }
+  });
+  app.get('/api/guide', (c) => c.json(getGuide(db)));
   app.get('/api/steps', (c) => c.json(steps.map((s) => ({ id: s.id, who: s.who, label: s.label, ran: ran.has(s.id) }))));
 
   app.post('/api/simulate/:stepId', async (c) => {

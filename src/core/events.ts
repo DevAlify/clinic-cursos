@@ -43,6 +43,8 @@ export const payloadSchemas = {
     personId: z.string(), businessNumber: z.string(), textRef: z.string(), provider, externalId: z.string().nullable(),
     basedOn: z.array(z.object({ tool: z.string(), readAt: z.string() })),
     askOrigin: z.boolean().optional(),
+    // The class this message offered to confirm; the next "sim" is read against it (no personal data).
+    offer: z.object({ product: z.string(), unit }).optional(),
   }),
   conversation_mode_changed: z.object({
     personId: z.string(), businessNumber: z.string(), mode: z.enum(CONVERSATION_MODES), reason: z.string(),
