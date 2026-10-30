@@ -127,7 +127,7 @@ export const tools: Record<string, ToolDef> = {
     kind: 'action', roles: ['ai', 'attendant'], approval: 'auto_above_confidence',
     input: z.object({ personId: z.string(), product: z.string(), unit, confidence, triggerSeq: z.number().int() }),
     run: (ctx, i: { personId: string; product: string; unit: 'sp' | 'rj' | 'cps' | 'online'; confidence: number | null; triggerSeq: number }) => {
-      const r = act(ctx, 'interest_declared', `interest:${i.triggerSeq}:${roleOf(ctx.actor)}`, { personId: i.personId, product: i.product, unit: i.unit, confidence: i.confidence });
+      const r = act(ctx, 'interest_declared', `interest:${i.triggerSeq}:${roleOf(ctx.actor)}:${i.product}:${i.unit}`, { personId: i.personId, product: i.product, unit: i.unit, confidence: i.confidence });
       return { ...r, opportunityId: findOpenOpportunity(ctx.db, i.personId, i.product, i.unit)?.id ?? null };
     },
   },
