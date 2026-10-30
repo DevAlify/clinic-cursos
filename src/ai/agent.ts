@@ -22,14 +22,17 @@ export async function aiReaction(db: Db, e: EventRow<'whatsapp_message_received'
   const actor = `ai:${MODEL}`;
   const tool = (name: string, input: unknown) => callTool(db, name, input, actor, rules, e.occurredAt, fetchImpl);
   const personId = findPerson(db, e.payload.identifiers);
-  const conversation = personId ? conversationTouch(db, personId, e.occurredAt) : null;
+  const conversation = personId ? conversationTouch(db, personId, e.payload.businessNumber, e.occurredAt) : null;
   if (!personId || !conversation) return;
   const c = classifyMessage(text);
   const unit = conversation.fields.unit.value;
   const route = routeFor(c.intent, unit, c.confidence, rules.aiConfidenceThreshold);
   const sensitive = c.confidence >= rules.aiConfidenceThreshold && (c.intent === 'clinical_question' || c.intent === 'complaint');
-  // A new conversation is routed once; a sensitive subject later in it is routed again, so the hand-off reaches the right team.
-  if (conversation.seq === e.seq || sensitive) {
+  const businessNumber = e.payload.businessNumber;
+  const state = getConversation(db, personId, businessNumber);
+  const purchaseFromTriage = state?.queue === 'triage' && c.intent === 'course_purchase' && route.queue !== 'triage';
+  // Route new conversations, recognized purchases leaving triage, and sensitive subjects needing a hand-off.
+  if (conversation.seq === e.seq || sensitive || purchaseFromTriage) {
     await tool('route_conversation', {
       messageSeq: e.seq, personId, queue: route.queue, reason: reasonFor(conversation.fields, route.why),
       summary: summaryFor(c), intent: c.intent, confidence: c.confidence, model: c.model,
@@ -45,8 +48,6 @@ export async function aiReaction(db: Db, e: EventRow<'whatsapp_message_received'
     await tool('open_opportunity', { personId, product: c.product.value, unit, confidence: c.product.confidence, triggerSeq: e.seq });
   }
 
-  const businessNumber = e.payload.businessNumber;
-  const state = getConversation(db, personId, businessNumber);
   if (!state || state.mode === 'human') return;
   const touchProduct = conversation.fields.product.value;
   const product = c.product?.value ?? (touchProduct && isCatalogProduct(touchProduct) ? touchProduct : null);

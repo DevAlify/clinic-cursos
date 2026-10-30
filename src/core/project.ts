@@ -42,7 +42,7 @@ export function project(db: Db, e: AnyEvent, rules: Rules): void {
       const p = e.payload;
       const personId = person(db, e, p.identifiers, p.displayRef);
       const link = p.code ? getLink(db, p.code) : null;
-      if (link || p.referral || !conversationTouch(db, personId, e.occurredAt)) {
+      if (link || p.referral || !conversationTouch(db, personId, p.businessNumber, e.occurredAt)) {
         insertTouch(db, e, personId, 'whatsapp', originFromWhatsApp(p, getEntryPointByNumber(db, p.businessNumber), link), p.code, false);
         if (link && isCatalogProduct(link.product)) ensureOpportunity(db, e, personId, link.product, link.unit, rules);
       }
@@ -87,11 +87,21 @@ export function project(db: Db, e: AnyEvent, rules: Rules): void {
       const personId = person(db, e, p.identifiers, p.displayRef);
       ensureRole(db, personId, 'student', p.unit, e.seq);
       const opp = p.opportunityId ? getOpportunity(db, p.opportunityId) : null;
-      if (opp) {
+      const mismatches = opp ? [
+        opp.personId !== personId ? 'person' : null,
+        opp.product !== p.product ? 'product' : null,
+        opp.unit !== p.unit ? 'unit' : null,
+      ].filter(Boolean) : [];
+      if (opp && mismatches.length === 0) {
         db.prepare("UPDATE opportunities SET status = 'won', stage = 'won', erp_sale_id = ? WHERE id = ?").run(p.saleId, opp.id);
       } else {
         const suggestion = findOpenOpportunity(db, personId, p.product, p.unit)?.id ?? null;
-        enqueue(db, e, 'reconciliation', 'reconciliation', personId, 'Venda do ERP sem oportunidade ligada', { saleId: p.saleId, product: p.product, unit: p.unit, suggestion });
+        enqueue(db, e, 'reconciliation', 'reconciliation', personId,
+          opp ? `Venda do ERP divergente: ${mismatches.join(', ')}` : 'Venda do ERP sem oportunidade ligada', {
+            saleId: p.saleId, product: p.product, unit: p.unit, suggestion,
+            sale: { personId, product: p.product, unit: p.unit },
+            opportunity: opp ? { id: opp.id, personId: opp.personId, product: opp.product, unit: opp.unit } : null,
+          });
       }
       return;
     }

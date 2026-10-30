@@ -65,11 +65,13 @@ export const messagesOf = (db: Db, personId: string, businessNumber: string) =>
 export const touchesOfEntryPoint = (db: Db, code: string) =>
   db.prepare("SELECT * FROM touches WHERE json_extract(fields, '$.entryPoint.value') = ? ORDER BY occurred_at, seq").all(code).map(toTouch);
 
-// The person's open WhatsApp conversation: latest WhatsApp touch in the last 24 hours.
-export function conversationTouch(db: Db, personId: string, at: string, hours = CONVERSATION_WINDOW_HOURS): TouchRow | null {
+// Latest WhatsApp touch for this person and business number in the last 24 hours.
+export function conversationTouch(db: Db, personId: string, businessNumber: string, at: string, hours = CONVERSATION_WINDOW_HOURS): TouchRow | null {
   const end = Date.parse(at);
   const start = end - hours * 3_600_000;
-  const touches = touchesOfPerson(db, personId).filter((t) => t.source === 'whatsapp');
+  const touches = db.prepare(`SELECT t.* FROM touches t JOIN events e ON e.seq = t.seq
+    WHERE t.person_id = ? AND t.source = 'whatsapp' AND json_extract(e.payload, '$.businessNumber') = ?
+    ORDER BY t.occurred_at, t.seq`).all(personId, businessNumber).map(toTouch);
   return touches.reverse().find((t) => Date.parse(t.occurredAt) <= end && Date.parse(t.occurredAt) >= start) ?? null;
 }
 

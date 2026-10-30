@@ -52,6 +52,31 @@ async function anaConversation(db: Db, waha: ReturnType<typeof fakeWaha>) {
 const outbound = (db: Db) => getState(db, R).messages.filter((m) => m.direction === 'out');
 const textOf = (db: Db, seq: number) => readPii(db, (db.prepare('SELECT text_ref FROM messages WHERE seq = ?').get(seq) as { text_ref: string }).text_ref);
 
+test('the same person contacting SP and RJ gets a touch, routing and offer for each business number', async (t) => {
+  const db = setup();
+  t.after(() => db.close());
+  const waha = fakeWaha();
+  appendAndProject(db, { source: 'seed', externalId: 'ep:rj-wa', type: 'entry_point_registered', occurredAt: NOW, actor: 'seed', payload: {
+    code: 'rj-whatsapp-principal-01', unit: 'rj', kind: 'whatsapp', label: 'RJ', owner: 'sales-rj', status: 'released', product: null, businessNumber: '552130000002',
+  } }, R);
+  const say = async (id: string, businessNumber: string) => ingest(db, {
+    source: 'whatsapp', externalId: id, type: 'whatsapp_message_received', occurredAt: NOW, actor: 'system', payload: {
+      businessNumber, identifiers: [toIdentifier(db, 'phone', '5511987650001')!], displayRef: null,
+      code: null, referral: null, textRef: null, provider: 'waha',
+    },
+  }, R, { text: 'Quero saber do curso de harmonização' }, waha.fetch);
+  await say('sp-first', SP);
+  await say('rj-first', '552130000002');
+  await say('sp-again', SP);
+  const s = getState(db, R);
+  assert.equal(new Set(s.conversations.map((c) => c.personId)).size, 1);
+  assert.deepEqual(s.touches.map((touch) => touch.fields.unit.value), ['sp', 'rj']);
+  assert.deepEqual(s.conversations.map((c) => [c.businessNumber, c.queue]).sort(), [[SP, 'sales-sp'], ['552130000002', 'sales-rj']]);
+  assert.deepEqual(s.opportunities.map((o) => o.unit), ['sp', 'rj']);
+  assert.match(textOf(db, outbound(db)[1].seq) ?? '', /Rio de Janeiro/);
+  assert.match(textOf(db, outbound(db)[2].seq) ?? '', /São Paulo/);
+});
+
 test('the AI answers through the provider with ERP data, and goes silent once a person takes over', async () => {
   const db = setup();
   const waha = fakeWaha();
@@ -71,6 +96,28 @@ test('the AI answers through the provider with ERP data, and goes silent once a 
   await say('false_551187650001@c.us_A2', 'E qual o horário das aulas?', '2026-10-29T19:05:00Z');
   assert.equal(outbound(db).length, 1);
   assert.equal(waha.calls.length, 1);
+});
+
+test('a recognized purchase after a greeting leaves triage and deduplicates each message route', async (t) => {
+  const db = setup();
+  t.after(() => db.close());
+  const waha = fakeWaha();
+  const say = (externalId: string, text: string) => ingest(db, {
+    source: 'whatsapp', externalId, type: 'whatsapp_message_received', occurredAt: NOW, actor: 'system', payload: {
+      businessNumber: SP, identifiers: [toIdentifier(db, 'phone', '5511987650001')!], displayRef: null,
+      code: null, referral: null, textRef: null, provider: 'waha',
+    },
+  }, R, { text }, waha.fetch);
+  await say('greeting', 'Bom dia');
+  assert.equal(getState(db, R).conversations[0].queue, 'triage');
+  const purchase = await say('purchase', 'Quero saber do curso');
+  assert.equal(getState(db, R).conversations[0].queue, 'sales-sp');
+  const before = maxSeq(db);
+  await say('purchase', 'Quero saber do curso');
+  assert.equal(maxSeq(db), before);
+  const routes = getState(db, R).queue.filter((q) => q.kind === 'routing');
+  assert.deepEqual(routes.map((q) => q.queue), ['triage', 'sales-sp']);
+  assert.equal(routes[1].details.messageSeq, purchase.event!.seq);
 });
 
 test('attendants reply and change the mode; the AI cannot use these tools', async () => {

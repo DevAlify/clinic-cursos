@@ -72,6 +72,37 @@ export function createErpApp({ notifyCore, db = new Database(':memory:') }: ErpD
     status: o.status, createdAt: o.created_at, paidAt: o.paid_at, saleId: o.sale_id,
   });
 
+  // The paid order is the outbox: its original sale id and timestamp survive every delivery attempt.
+  const notifications = new Map<number, Promise<boolean>>();
+  const notifyOrder = (order: OrderRow): Promise<boolean> => {
+    const active = notifications.get(order.id);
+    if (active) return active;
+    const sale: SaleConfirmed = {
+      type: 'sale_confirmed', saleId: order.sale_id!, confirmedAt: order.paid_at!, opportunityId: order.opportunity_id,
+      product: order.product, unit: order.unit,
+      ...(order.name ? { name: order.name } : {}), ...(order.phone ? { phone: order.phone } : {}), ...(order.email ? { email: order.email } : {}),
+    };
+    const pending = (async () => {
+      try {
+        await notifyCore(sale);
+        db.prepare('UPDATE orders SET notified = 1 WHERE id = ?').run(order.id);
+        console.log(`erp: venda ${sale.saleId} do pedido ${orderCode(order.id)} avisada ao core`);
+        return true;
+      } catch (e) {
+        console.error(`erp: pedido ${orderCode(order.id)} pago, mas o aviso da venda ${sale.saleId} ao core falhou (${e instanceof Error ? e.name : 'UnknownError'}); nova tentativa em 1 segundo`);
+        return false;
+      }
+    })().finally(() => notifications.delete(order.id));
+    notifications.set(order.id, pending);
+    return pending;
+  };
+  const retryTimer = setInterval(() => {
+    if (!db.open) { clearInterval(retryTimer); return; }
+    const pending = db.prepare("SELECT * FROM orders WHERE status = 'paid' AND notified = 0").all() as OrderRow[];
+    for (const order of pending) void notifyOrder(order);
+  }, 1000);
+  retryTimer.unref();
+
   const app = new Hono();
   app.use('/api/*', bodyLimit({ maxSize: 100 * 1024, onError: (c) => c.json({ error: 'corpo grande demais' }, 413) }));
 
@@ -114,21 +145,10 @@ export function createErpApp({ notifyCore, db = new Database(':memory:') }: ErpD
       order = getOrder(id)!;
     }
 
-    // The payment is already stored. If the core is down, the same call again only repeats the notice (the core drops duplicates by sale id).
-    const sale: SaleConfirmed = {
-      type: 'sale_confirmed', saleId: order.sale_id!, confirmedAt: order.paid_at!, opportunityId: order.opportunity_id,
-      product: order.product, unit: order.unit,
-      ...(order.name ? { name: order.name } : {}), ...(order.phone ? { phone: order.phone } : {}), ...(order.email ? { email: order.email } : {}),
-    };
-    try {
-      await notifyCore(sale);
-    } catch (e) {
-      console.error(`erp: pedido ${orderCode(order.id)} pago, mas o aviso da venda ${sale.saleId} ao core falhou: ${e instanceof Error ? e.message : String(e)}`);
-      return c.json({ error: 'pagamento registrado, mas o core não recebeu o aviso; confirme de novo para reenviar', orderId: orderCode(order.id), saleId: sale.saleId }, 502);
+    if (!await notifyOrder(order)) {
+      return c.json({ error: 'pagamento registrado; aviso ao core pendente de reenvio automático', orderId: orderCode(order.id), saleId: order.sale_id }, 502);
     }
-    db.prepare('UPDATE orders SET notified = 1 WHERE id = ?').run(order.id);
-    console.log(`erp: venda ${sale.saleId} do pedido ${orderCode(order.id)} avisada ao core`);
-    return c.json({ orderId: orderCode(order.id), status: 'paid', saleId: sale.saleId, seatsLeft: seatsLeft(order.product, order.unit) });
+    return c.json({ orderId: orderCode(order.id), status: 'paid', saleId: order.sale_id, seatsLeft: seatsLeft(order.product, order.unit) });
   });
 
   return app;

@@ -200,6 +200,8 @@ Tudo é configurado por variáveis de ambiente, com os valores padrão de demons
 
 ## Limites desta demo
 
+Os atalhos de ERP e celular no produto usam as portas padrão 3100/3200; alterar `ERP_PORT`/`WAHA_PORT` não atualiza esses atalhos.
+
 A demo roda na sua máquina e deixa algumas portas abertas de propósito, para o simulador funcionar. Não a coloque numa rede aberta como está:
 
 - o cabeçalho `x-occurred-at` deixa o chamador escolher a hora gravada do evento (é como a simulação mantém seu relógio fictício; só aceita data ISO 8601 com fuso);

@@ -78,6 +78,30 @@ test('a sale that arrives before the lead gets the opportunity as a suggestion l
   assert.equal(getState(db, R).queue.find((q) => q.kind === 'reconciliation')?.details.suggestion, `O${lead.seq}`);
 });
 
+for (const mismatch of ['person', 'product', 'unit'] as const) {
+  test(`an ERP sale with a mismatched ${mismatch} stays open and records both sides for reconciliation`, (t) => {
+    const db = setup();
+    t.after(() => db.close());
+    const lead = appendAndProject(db, form(db, 'lead', '(11) 98765-0001', '2026-10-29T17:00:00Z'), R).event!;
+    const product = mismatch === 'product' ? 'other-course' : 'hof';
+    const unit = mismatch === 'unit' ? 'rj' : 'sp';
+    const phone = mismatch === 'person' ? '(11) 95555-0005' : '(11) 98765-0001';
+    const sale = appendAndProject(db, { source: 'erp', externalId: 'sale:mismatch', type: 'erp_sale_confirmed', occurredAt: '2026-10-29T18:00:00Z', actor: 'system', payload: {
+      saleId: 'S-mismatch', opportunityId: `O${lead.seq}`, identifiers: [toIdentifier(db, 'phone', phone)!], displayRef: null, product, unit,
+    } }, R);
+    assert.equal(sale.error, null);
+    const opp = allOpportunities(db)[0];
+    assert.deepEqual([opp.status, opp.stage, opp.erpSaleId], ['open', 'new', null]);
+    const items = getState(db, R).queue.filter((q) => q.kind === 'reconciliation');
+    assert.equal(items.length, 1);
+    assert.match(items[0].reason, new RegExp(mismatch));
+    assert.deepEqual(items[0].details.sale, {
+      personId: mismatch === 'person' ? `P${sale.event!.seq}` : `P${lead.seq}`, product, unit,
+    });
+    assert.deepEqual(items[0].details.opportunity, { id: opp.id, personId: opp.personId, product: 'hof', unit: 'sp' });
+  });
+}
+
 test('identifiers pointing to two people open a merge review', () => {
   const db = setup();
   appendAndProject(db, form(db, 'f1', '(11) 98765-0001', '2026-10-29T17:00:00Z'), R);
