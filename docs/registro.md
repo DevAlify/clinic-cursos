@@ -66,5 +66,5 @@ Todas com data, em `docs/processo/pesquisa/`:
 3. **Limites da demo, declarados no README:** sem autenticação nas rotas; o cabeçalho `x-occurred-at` deixa a simulação escolher o horário; `/tools` confia no `x-actor`; segredos de demonstração; com a chave HMAC do WAHA vazia, qualquer corpo é aceito; o webhook espera a reação da IA (em produção, gravar, responder 200 e reagir por fila); um único `META_PHONE_NUMBER_ID`.
 4. **Exceções de dependência:** class-variance-authority 0.7.1 (exigida pelos componentes do shadcn, sem versão estável publicada); 3 alertas baixos do `npm audit` dentro da ferramenta de linha de comando do shadcn, fora do código servido.
 5. **Produto:** telas abaixo de 1280 px não foram adaptadas; a ficha do CRM não prende o foco do teclado; a seleção não vai para a URL.
-6. **`verify`:** prova o núcleo com o cliente local do ERP; o circuito HTTP entre os três serviços está provado nos testes de serviços e na demo ao vivo.
+6. **`verify`:** prova o núcleo com o cliente local do ERP; cada ligação HTTP entre os serviços tem teste próprio (`test/services.test.ts`, `test/erp-notification.test.ts`); o circuito inteiro, com os três juntos, está provado na demo ao vivo.
 7. **Cofre:** o texto das mensagens é guardado por valor; duas pessoas com a mesma mensagem dividem a mesma linha (em produção, chave por pessoa).

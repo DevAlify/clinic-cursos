@@ -39,12 +39,12 @@ Cada serviço é um processo (ou contêiner) com porta, banco e variáveis próp
 | `erp` | 3100 | ERP simulado, outro sistema: catálogo, pedidos, pagamentos e vagas | lista de pedidos com o botão "Confirmar pagamento" e o catálogo com as vagas |
 | `waha` | 3200 | simulador compatível com o WAHA: mesmo webhook, mesma rota de envio, mesma chave e mesmo HMAC | "celular do lead": escolhe a pessoa, lê o QR do banner do Rio, manda mensagem e vê as respostas |
 
-O caminho de uma venda, do começo ao fim:
+O caminho de uma venda, do começo ao fim. Para ver a origem observada, comece pelo anúncio: no Bastidores, rode o roteiro até "Ana · Clica no anúncio da Meta e preenche a LP de SP". Sem esse passo, a conversa começa sem link rastreado, e a origem só aparece se a pessoa responder à pergunta da IA.
 
 1. No "celular do lead" (`waha`, :3200), a pessoa manda uma mensagem. O simulador monta o webhook do WAHA, assina com HMAC sha512 e entrega ao `core`.
 2. O `core` identifica a origem, abre a conversa e a oportunidade, e responde pelo WhatsApp (a resposta chega ao celular pela rota de envio do WAHA). O preço e as vagas da resposta vêm do `erp`.
 3. A atendente avança a etapa e registra a pré-matrícula: o `core` cria o pedido no `erp` (:3100) com o id da oportunidade.
-4. No `erp`, "Confirmar pagamento" baixa a vaga e avisa o `core` pelo webhook de venda; a oportunidade fica ganha, com a origem preservada do anúncio à venda.
+4. No `erp`, "Confirmar pagamento" baixa a vaga e avisa o `core` pelo webhook de venda; a oportunidade fica ganha e leva a origem que o sistema conseguiu provar: observada, se a pessoa veio de um link rastreado (anúncio, QR, formulário); declarada, se respondeu à pergunta da IA; desconhecida, se nada disso aconteceu.
 
 ## Provedor de WhatsApp: Meta ou WAHA
 
@@ -189,7 +189,7 @@ Tudo é configurado por variáveis de ambiente, com os valores padrão de demons
 | `WHATSAPP_PROVIDER` | `waha` | provedor de WhatsApp: `waha` ou `meta` |
 | `HOST` | `127.0.0.1` | endereço de escuta dos três serviços (só esta máquina). No compose vale `0.0.0.0` dentro dos contêineres, e as portas são publicadas só em `127.0.0.1`. Não use `0.0.0.0` fora de um contêiner |
 | `CORE_PORT`, `ERP_PORT`, `WAHA_PORT` | `3000`, `3100`, `3200` | portas dos três serviços |
-| `CORE_URL`, `ERP_URL`, `WAHA_URL` | `http://localhost:3000`, `:3100`, `:3200` (no `npm run demo` e no compose) | como um serviço encontra o outro; o `core` sozinho (testes, `verify`) roda com `ERP_URL` e `WAHA_URL` vazios, sem rede |
+| `CORE_URL`, `ERP_URL`, `WAHA_URL` | `http://localhost:3000`, `:3100`, `:3200` no `npm run demo`; no compose, os nomes dos serviços | como um serviço encontra o outro; o `core` sozinho (testes, `verify`) roda com `ERP_URL` e `WAHA_URL` vazios, sem rede |
 | `ERP_TOKEN` | `demo-erp-token` | autentica o ERP (cabeçalho `x-erp-token`), nos dois sentidos |
 | `WAHA_API_KEY` | `demo-waha-key` | chave da rota de envio do WAHA (`X-Api-Key`) |
 | `WAHA_WEBHOOK_HMAC_KEY` | `demo-waha-hmac` | chave do HMAC sha512 do webhook do WAHA |
@@ -200,8 +200,6 @@ Tudo é configurado por variáveis de ambiente, com os valores padrão de demons
 
 ## Limites desta demo
 
-Os atalhos de ERP e celular no produto usam as portas padrão 3100/3200; alterar `ERP_PORT`/`WAHA_PORT` não atualiza esses atalhos.
-
 A demo roda na sua máquina e deixa algumas portas abertas de propósito, para o simulador funcionar. Não a coloque numa rede aberta como está:
 
 - o cabeçalho `x-occurred-at` deixa o chamador escolher a hora gravada do evento (é como a simulação mantém seu relógio fictício; só aceita data ISO 8601 com fuso);
@@ -209,6 +207,7 @@ A demo roda na sua máquina e deixa algumas portas abertas de propósito, para o
 - `/api/reset`, `/api/replay` e `/api/simulate/*` não têm autenticação, nem `/api/conversations/*`, que devolve o texto das conversas (inclusive uma queixa de saúde fictícia, dado sensível pela LGPD);
 - as páginas e as leituras do ERP e do simulador do WAHA não têm autenticação (só a criação de pedidos do ERP e a rota de envio do WAHA pedem chave), e "Confirmar pagamento" é um botão aberto;
 - o ERP e o celular do lead guardam o estado em memória ou num arquivo que recomeça do zero a cada subida, e `/api/reset` do core não zera o ERP (reinicie a demo para repetir o roteiro);
+- os atalhos de ERP e celular no produto usam as portas padrão 3100 e 3200; mudar `ERP_PORT` ou `WAHA_PORT` não atualiza esses atalhos;
 - os segredos são os valores padrão de demonstração, lidos de variáveis de ambiente;
 - nenhuma rota tem autenticação, e a marca `test: true` do formulário é pública: qualquer chamador pode mandar um lead de teste (é ela que libera um ponto em auditoria);
 - não há limite de requisições nem cabeçalhos de segurança (CSP, HSTS e afins);
