@@ -1,10 +1,10 @@
 # Registro do trabalho
 
-Desafio Product Builder / FDE da Clinic Cursos, de 28 a 29/10/2026. Dados e exemplos fictícios; nenhum acesso aos sistemas da Clinic.
+Desafio Product Builder / FDE da Clinic Cursos, de 28 a 30/10/2026. Dados e exemplos fictícios; nenhum acesso aos sistemas da Clinic.
 
 ## Tempo
 
-**Passei do limite sugerido de 4 horas.** Somando leitura, pesquisa, desenho, implementação e documento, foram cerca de **7 horas de trabalho ativo**, mais o tempo dos agentes que trabalharam em paralelo. Escolhi investir no desenho (quatro seções aprovadas uma a uma), na verificação (testes, revisões cruzadas e prova ponta a ponta) e, no fim, numa demo que mostra o sistema em uso, e não só os registros. O PDF pede pesquisa e demonstração dentro das 4 horas; registro aqui o excesso em vez de escondê-lo.
+**Passei do limite sugerido de 4 horas.** Somando leitura, pesquisa, desenho, implementação e documento, foram cerca de **7h45 de trabalho ativo**, mais o tempo dos agentes que trabalharam em paralelo. Escolhi investir no desenho (quatro seções aprovadas uma a uma), na verificação (testes, revisões cruzadas e prova ponta a ponta) e, no fim, numa demo que mostra o sistema em uso, e não só os registros. O PDF pede pesquisa e demonstração dentro das 4 horas; registro aqui o excesso em vez de escondê-lo.
 
 Como medi: horários da sessão de trabalho, agrupados em blocos sem pausa maior que 20 minutos. Leitura do PDF fora da sessão não entrou.
 
@@ -16,8 +16,9 @@ Como medi: horários da sessão de trabalho, agrupados em blocos sem pausa maior
 | 4 | 29/10 11:58–13:10 | 1h12 | plano de implementação (TDD, contratos), repositório privado, base do projeto, mockup e revisão de UX |
 | 5 | 29/10 15:08–16:37 | 1h29 | núcleo (log, identidade, origem, regras), projeções, ferramentas e IA, porta HTTP e cenários, Docker e README, documento v1; correção do alvo da demo e Plano v2 |
 | 6 | 29/10 20:00–21:00 | ~1h | sistema central: mensagens, provedores Meta e WAHA, agente que responde, pipeline, ERP e WAHA como serviços, produto em React, integração e prova ponta a ponta, documento v2, revisões |
+| 7 | 30/10 01:57–02:45 | ~48 min | revisões da leva (segurança, revisão cruzada do Codex, tech-lead) e as correções que elas pediram, com teste; prova de novo no Docker; merge |
 
-Contagem extra, a partir do primeiro commit (29/10 11:36): cerca de 4h40 de trabalho ativo até a entrega. Entre 13:10 e 15:08 e entre 16:37 e 20:00, os limites de uso das ferramentas de IA pararam o trabalho; esse tempo não entrou.
+Contagem extra, a partir do primeiro commit (29/10 11:36): cerca de 4h30 de trabalho ativo até a entrega (blocos 4 a 7). Entre 13:10 e 15:08 e entre 16:37 e 20:00 de 29/10, os limites de uso das ferramentas de IA pararam o trabalho; entre 21:00 de 29/10 e 01:57 de 30/10, esperei o limite do Claude e do Codex voltar. Esse tempo não entrou.
 
 ## IA e ferramentas usadas
 
@@ -47,16 +48,16 @@ Todas com data, em `docs/processo/pesquisa/`:
 
 | Comando | Resultado |
 |---|---|
-| `npm test` | 122 testes passando |
+| `npm test` | 130 testes passando |
 | `npm run verify` | 36 de 36 verificações passaram |
 | `npm run replay -- --window 14` | só a atribuição da Carla muda (QR observado → desconhecida) |
 | `npm run typecheck` | limpo na raiz e no web |
 | `npm run build:web` | build ok |
 | `npm run demo`, ao vivo | Ana escreve pelo celular simulado; a IA responde com vagas e preço lidos do ERP; a atendente assume, avança e registra a pré-matrícula; o ERP cria o pedido, o pagamento volta ao CRM e a oportunidade fica ganha com a origem preservada |
-| `docker compose up --build` | três contêineres; o mesmo circuito funcionou entre eles |
+| `docker compose up --build` | três contêineres; o mesmo circuito funcionou entre eles. Conferido de novo em 30/10, depois das correções: a mensagem do celular chega ao core, a IA responde com preço e vagas lidos do ERP, e o "Recomeçar" zera os três |
 | `npx npm@11 ci` em clone limpo | instalação ok no Windows com o `.npmrc` |
 | Revisão de interface (diretrizes da Vercel) | 5 correções de acessibilidade aplicadas |
-| Revisões cruzadas e final | base, núcleo (log, cofre, identidade, origem, regras): revisão cruzada aprovada e tech-lead. Branch integrada, em 30/10: revisão de segurança (APPROVE_WITH_NOTES, correções aplicadas); revisão cruzada do Codex com risco alto pediu 4 correções (origem por unidade quando a mesma pessoa fala com duas unidades, conferência de pessoa, curso e unidade antes de a venda ganhar, encaminhamento quando a triagem ganha intenção, reenvio do aviso de pagamento do ERP), feitas com teste e aprovadas na 2ª rodada; tech-lead antes do merge |
+| Revisões cruzadas e final | base, núcleo (log, cofre, identidade, origem, regras): revisão cruzada aprovada e tech-lead. Branch integrada, em 30/10: revisão de segurança (APPROVE_WITH_NOTES, correções aplicadas); revisão cruzada do Codex com risco alto pediu 4 correções (origem por unidade quando a mesma pessoa fala com duas unidades, conferência de pessoa, curso e unidade antes de a venda ganhar, encaminhamento quando a triagem ganha intenção, reenvio do aviso de pagamento do ERP), feitas com teste e aprovadas na 2ª rodada; tech-lead: APPROVE_WITH_NOTES, e os 3 pontos importantes (o "Recomeçar" não zerava o ERP, as horas de 30/10 fora deste registro, uma origem prometida no README que aquele caminho não produz) corrigidos e revisados |
 | Bug achado na revisão | `/api/replay` falhava com o banco em arquivo (modo WAL); corrigido com teste que abre o banco real |
 
 ## Pendências e o que ficou de fora
