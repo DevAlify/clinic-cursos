@@ -3,7 +3,7 @@ import { composeReply } from './reply.ts';
 import type { Db } from '../core/db.ts';
 import { findPerson } from '../core/identity.ts';
 import { LEVEL_LABEL } from '../core/origin.ts';
-import { conversationTouch, getConversation, hasOpenOpportunity, lastOfferOf, originOf, personName } from '../core/queries.ts';
+import { conversationTouch, getConversation, hasOpenOpportunity, hasSentIn, lastOfferOf, originOf, personName } from '../core/queries.ts';
 import type { EventRow, Fetch, Fields, Rules, Unit } from '../core/types.ts';
 import { isCatalogProduct, type CourseOffer } from '../erp/catalog.ts';
 import { getCatalog } from '../erp/client.ts';
@@ -90,7 +90,7 @@ export async function aiReaction(db: Db, e: EventRow<'whatsapp_message_received'
   }
   const reply = composeReply({
     classification: c, conversation: state, person: { name: personName(db, personId) },
-    fields: originOf(db, personId) ?? conversation.fields, offer, erpUnavailable, catalog, unitOffer, threshold: rules.aiConfidenceThreshold, now: e.occurredAt,
+    fields: originOf(db, personId) ?? conversation.fields, offer, erpUnavailable, catalog, unitOffer, greeted: hasSentIn(db, personId, businessNumber), confirmed: offered !== null, threshold: rules.aiConfidenceThreshold, now: e.occurredAt,
   });
   if (!reply) return;
   const ctx: ToolContext = { db, actor, rules, now: e.occurredAt, fetch: fetchImpl };

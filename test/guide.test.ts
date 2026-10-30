@@ -60,7 +60,7 @@ test('A1, A2, A3: a generic Rio QR lead gets the open classes, then the unit cla
   assert.equal(opps(getDb()), base, 'an offer alone opens nothing');
 
   const reply = await say('sim');
-  assert.match(reply!, /^Olá, Carla! A turma de Harmonização Facial em São Paulo começa em 14\/11, custa R\$ 7\.900 e tem 3 vagas \(consultado no ERP às /);
+  assert.match(reply!, /^Ótimo! A turma de Harmonização Facial em São Paulo começa em 14\/11, custa R\$ 7\.900 e tem 3 vagas \(consultado no ERP às /);
   assert.deepEqual(allOpportunities(getDb()).slice(base).map((o) => [o.product, o.unit, o.status]), [['hof', 'sp', 'open']]);
   assert.equal(routes(getDb()).at(-1), 'sales-sp');
 

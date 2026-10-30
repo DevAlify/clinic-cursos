@@ -101,3 +101,12 @@ test('A1 to A3 in human mode: the reply is always silent', () => {
     assert.equal(composeReply(ctx(text, { conversation: human, catalog: CATALOG, unitOffer: findOffer('hof', 'sp')! })), null);
   }
 });
+
+test('no second greeting once the clinic has already written in the conversation; a confirmed offer opens with "Ótimo!"', () => {
+  const offer = findOffer('hof', 'sp')!;
+  assert.match(composeReply(ctx('Quanto custa o curso?', { offer }))!.text, /^Olá, Ana! A turma/);
+  assert.match(composeReply(ctx('Quanto custa o curso?', { offer, greeted: true }))!.text, /^A turma de Harmonização Facial em São Paulo começa/);
+  assert.equal(composeReply(ctx('Quanto custa o curso?', { offer, greeted: true, confirmed: true }))!.text, 'Ótimo! A turma de Harmonização Facial em São Paulo começa em 14/11, custa R$ 7.900 e tem 3 vagas (consultado no ERP às 14:10). Quer garantir a sua?');
+  assert.match(composeReply(ctx('Quero saber de cursos', { catalog: CATALOG, greeted: true }))!.text, /^Temos turmas abertas/);
+  assert.match(composeReply(ctx('Quero fazer uma reclamação', { greeted: true }))!.text, /^Sinto muito pelo que aconteceu/);
+});

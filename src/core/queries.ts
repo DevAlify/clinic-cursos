@@ -100,6 +100,9 @@ export function lastOfferOf(db: Db, personId: string, businessNumber: string): {
   return row?.offer ? JSON.parse(row.offer) : null;
 }
 
+export const hasSentIn = (db: Db, personId: string, businessNumber: string): boolean =>
+  db.prepare("SELECT 1 FROM messages WHERE person_id = ? AND business_number = ? AND direction = 'out'").get(personId, businessNumber) !== undefined;
+
 export const hasOpenOpportunity = (db: Db, personId: string): boolean =>
   db.prepare("SELECT 1 FROM opportunities WHERE person_id = ? AND status = 'open'").get(personId) !== undefined;
 
