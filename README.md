@@ -224,6 +224,7 @@ Antes de qualquer uso real, isso ficaria protegido: autenticação nas rotas, ch
 ## Onde estão os documentos
 
 - Documento de 5 páginas: `docs/documento.pdf`
+- Arquitetura do sistema em produção (complementar: stack, serviços, infraestrutura, segurança, custos): `docs/arquitetura.pdf` (fonte em `docs/arquitetura.html`)
 - Registro (tempo, IA e ferramentas usadas, fontes, verificações e pendências): `docs/registro.md`
 - Spec (desenho da solução): `docs/processo/2026-10-29-desenho.md`
 - Plano de implementação: `docs/processo/2026-10-29-plano.md`
