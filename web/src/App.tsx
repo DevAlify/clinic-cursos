@@ -1,4 +1,9 @@
+import { useRef, useState } from 'react';
 import { ExternalLink } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { GuidePanel } from '@/components/guide/GuidePanel';
+import { useGuide } from '@/lib/guide.ts';
+import { ERP_URL, WAHA_URL } from '@/lib/services.ts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { AtendimentoView } from '@/components/atendimento/AtendimentoView';
@@ -15,11 +20,6 @@ const TABS = [
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
 const TAB_IDS: readonly TabId[] = TABS.map((t) => t.id);
-
-// The other two services run on their own ports of the same machine.
-const ERP_PORT = 3100;
-const WAHA_PORT = 3200;
-const serviceUrl = (port: number) => `${window.location.protocol}//${window.location.hostname}:${port}`;
 
 function ServiceLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
@@ -38,6 +38,10 @@ function ServiceLink({ href, children }: { href: string; children: React.ReactNo
 
 export default function App() {
   const [tab, setTab] = useHashTab(TAB_IDS, 'atendimento');
+  const [guideOpen, setGuideOpen] = useState(true);
+  const toggle = useRef<HTMLButtonElement>(null);
+  const guide = useGuide(tab);
+  const closeGuide = () => { setGuideOpen(false); requestAnimationFrame(() => toggle.current?.focus()); };
   return (
     <TooltipProvider>
       <Tabs value={tab} onValueChange={(v) => setTab(v as TabId)} className="h-dvh gap-0">
@@ -54,17 +58,21 @@ export default function App() {
             ))}
           </TabsList>
           <div className="ml-auto flex items-center gap-3">
-            <ServiceLink href={serviceUrl(ERP_PORT)}>ERP</ServiceLink>
-            <ServiceLink href={serviceUrl(WAHA_PORT)}>Celular do lead (WAHA)</ServiceLink>
+            <ServiceLink href={ERP_URL}>ERP</ServiceLink>
+            <ServiceLink href={WAHA_URL}>Celular do lead (WAHA)</ServiceLink>
+            <Button ref={toggle} size="lg" variant="outline" aria-expanded={guideOpen} aria-controls="demo-guide" onClick={() => (guideOpen ? closeGuide() : setGuideOpen(true))}>Guia da demo</Button>
             <span className="rounded-md border border-input px-2 py-0.5 text-meta">dados fictícios</span>
           </div>
         </header>
-        <main id="main" tabIndex={-1} className="min-h-0 flex-1 outline-none">
-          <TabsContent value="atendimento" className="h-full"><AtendimentoView /></TabsContent>
-          <TabsContent value="crm" className="h-full"><CrmView /></TabsContent>
-          <TabsContent value="campanhas" className="h-full overflow-y-auto"><CampanhasView /></TabsContent>
-          <TabsContent value="bastidores" className="h-full overflow-y-auto"><BastidoresView /></TabsContent>
-        </main>
+        <div data-guide={guideOpen ? 'open' : 'closed'} className="group/guide flex min-h-0 flex-1">
+          <main id="main" tabIndex={-1} className="min-h-0 min-w-0 flex-1 outline-none">
+            <TabsContent value="atendimento" className="h-full"><AtendimentoView /></TabsContent>
+            <TabsContent value="crm" className="h-full"><CrmView /></TabsContent>
+            <TabsContent value="campanhas" className="h-full overflow-y-auto"><CampanhasView /></TabsContent>
+            <TabsContent value="bastidores" className="h-full overflow-y-auto"><BastidoresView /></TabsContent>
+          </main>
+          {guideOpen && <GuidePanel guide={guide} onClose={closeGuide} />}
+        </div>
       </Tabs>
     </TooltipProvider>
   );

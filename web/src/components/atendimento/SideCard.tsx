@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { OpenOpportunity } from '@/components/atendimento/OpenOpportunity';
 import { Code, FieldList } from '@/components/origin';
 import { ActionError } from '@/components/states';
 import { advanceOpportunity, requestEnrollment, type ConversationDetail, type Stage, type V2Opportunity } from '@/lib/api.ts';
@@ -61,7 +62,10 @@ export function SideCard({ detail, onChanged }: { detail: ConversationDetail; on
       <section>
         <Heading>Oportunidades</Heading>
         {detail.opportunities.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nenhuma oportunidade aberta para esta pessoa.</p>
+          <>
+            <p className="text-sm text-muted-foreground">Nenhuma oportunidade aberta para esta pessoa.</p>
+            <OpenOpportunity detail={detail} onChanged={onChanged} />
+          </>
         ) : (
           <div className="space-y-3">{detail.opportunities.map((o) => <Opportunity key={o.id} o={o} onChanged={onChanged} />)}</div>
         )}

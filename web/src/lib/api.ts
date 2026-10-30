@@ -2,10 +2,10 @@
 // when a route's real shape differs, adjust it here and nothing else.
 import type { AttributionChange } from '../../../src/core/replay.ts';
 import type { State } from '../../../src/core/state.ts';
-import type { Fields, Level } from '../../../src/core/types.ts';
+import type { Fields, Level, Unit } from '../../../src/core/types.ts';
 import { STAGES, type Stage } from './format.ts';
 
-export type { AttributionChange, Fields, Level, Stage };
+export type { AttributionChange, Fields, Level, Stage, Unit };
 
 export const ATTENDANT = 'attendant:joana';
 
@@ -47,6 +47,11 @@ export interface CampaignRow {
   campaign: string; unit: string | null; product: string | null; leads: number; opportunities: number; won: number;
   levels: LevelMix; seatsLeft: number | null; spend: number | null; costPerLead: number | null; costPerSale: number | null;
 }
+
+export interface CatalogItem { product: string; unit: Unit; name: string; price: number; seatsLeft: number; nextClass: string }
+export type GuideStatus = 'done' | 'current' | 'todo';
+export interface GuideStep { id: 'origin' | 'message' | 'attendance' | 'erp' | 'crm'; status: GuideStatus; hasOpportunity?: boolean }
+export interface Guide { total: number; done: number; steps: GuideStep[] }
 
 // ---- transport -------------------------------------------------------------
 
@@ -115,6 +120,22 @@ export async function getPipeline(): Promise<Pipeline> {
   return out;
 }
 
+// ---- demo guide and catalog -------------------------------------------------
+
+export const getGuide = () => request<Guide>('/api/guide');
+export const getCatalog = async (): Promise<CatalogItem[]> => list<CatalogItem>(await request<unknown>('/api/catalog'), 'catalog');
+
+// "Rodar até aqui": plays the scripted steps, in order, up to and including `targetId`; steps already run are skipped.
+export async function runUntil(targetId: string): Promise<void> {
+  const all = await getSteps();
+  const last = all.findIndex((s) => s.id === targetId);
+  for (const s of all.slice(0, last + 1)) {
+    if (s.ran) continue;
+    const r = await simulate(s.id);
+    if (!r.ok) throw new Error(`O passo foi enviado, mas o sistema recusou (código ${r.status}).`);
+  }
+}
+
 // ---- tools (actor: the attendant) -------------------------------------------
 
 const tool = (name: string, input: unknown) => post<{ ok: true; result: unknown }>(`/tools/${name}`, input, { 'x-actor': ATTENDANT });
@@ -128,3 +149,10 @@ export const advanceOpportunity = (opportunityId: string, stage: Stage, reason: 
 export const requestEnrollment = (opportunityId: string) => tool('request_enrollment', { opportunityId });
 export const declareOrigin = (personId: string, touchSeq: number, value: string, quote: string) =>
   tool('record_declared_origin', { personId, touchSeq, value, quote, confidence: null, triggerSeq: touchSeq });
+
+// Same tool the AI uses; the log records it as an action of the attendant. Returns the id of the opportunity it opened, if any.
+export async function openOpportunity(personId: string, product: string, unit: Unit, triggerSeq: number): Promise<string | null> {
+  const r = await tool('open_opportunity', { personId, product, unit, confidence: null, triggerSeq });
+  const id = r.result && typeof r.result === 'object' && 'opportunityId' in r.result ? r.result.opportunityId : null;
+  return typeof id === 'string' ? id : null;
+}
