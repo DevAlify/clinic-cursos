@@ -42,7 +42,7 @@ for (const s of services) {
   child.on('error', (e) => { console.error(`[${s.name}] não subiu: ${e.message}`); stop(1); });
   child.on('exit', (code) => {
     if (stopping) return;
-    console.error(`[${s.name}] encerrou (código ${code}); parando os outros serviços. Se a porta estava ocupada, mude a variável de ambiente (ver .env.example).`);
+    console.error(`[${s.name}] encerrou (código ${code}); parando os outros serviços. Veja o erro acima: se outro processo mantém o banco ocupado, encerre-o pelo PID; se a porta está ocupada, ajuste a variável de ambiente (ver .env.example).`);
     stop(1);
   });
 }
