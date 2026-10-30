@@ -34,17 +34,23 @@ const UNIT_PLACE: Record<string, string> = { sp: ' em São Paulo', rj: ' no Rio 
 // Short places for the list of classes, and the same capitalised to open a sentence.
 const UNIT_SHORT: Record<string, string> = { sp: 'em São Paulo', rj: 'no Rio', cps: 'em Campinas' };
 const ORIGIN_QUESTION = 'Antes, como você conheceu a Clinic? Instagram, Google, indicação ou outro?';
-const MENU = 'Oi! Sou a assistente da Clinic. Você quer saber de cursos, ser paciente modelo ou tirar uma dúvida?';
+const SUBJECTS = 'Você quer saber de cursos, ser paciente modelo ou tirar uma dúvida?';
+// Only the first message introduces the assistant; later on, the same question without the introduction.
+const menu = (greeted: boolean | undefined) => (greeted ? `Não entendi bem. ${SUBJECTS}` : `Oi! Sou a assistente da Clinic. ${SUBJECTS}`);
+// "equipe de vendas de São Paulo": the place with the preposition the sales team takes; the online course has no unit team.
+const SALES_OF: Record<string, string> = { sp: ' de São Paulo', rj: ' do Rio de Janeiro', cps: ' de Campinas', online: '' };
 
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
 const ddmm = (day: string) => `${day.slice(8, 10)}/${day.slice(5, 7)}`;
 
-function offerText(hello: string, o: CourseOffer, now: string): string {
+function offerText(hello: string, o: CourseOffer, now: string, confirmed: boolean | undefined): string {
   const where = `A turma de ${o.name}${UNIT_PLACE[o.unit] ?? ` em ${o.unit}`}`;
   const source = `(consultado no ERP às ${hhmm(now)})`;
   if (o.seatsLeft <= 0) return `${hello}${where} de ${ddmm(o.nextClass)} está sem vagas ${source}. Quer que eu avise quando abrir a próxima?`;
   const seats = o.seatsLeft === 1 ? '1 vaga' : `${o.seatsLeft} vagas`;
-  return `${hello}${where} começa em ${ddmm(o.nextClass)}, custa R$ ${o.price.toLocaleString('pt-BR')} e tem ${seats} ${source}. Quer garantir a sua?`;
+  const facts = `${hello}${where} começa em ${ddmm(o.nextClass)}, custa R$ ${o.price.toLocaleString('pt-BR')} e tem ${seats} ${source}.`;
+  // After a "sim" the reply ends with the hand-off, not with a question a second "sim" would answer.
+  return confirmed ? `${facts} Vou passar você para a equipe de vendas${SALES_OF[o.unit] ?? ` de ${o.unit}`}.` : `${facts} Quer garantir a sua?`;
 }
 
 const joinE = (xs: string[]) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} e ${xs.at(-1)}`);
@@ -65,11 +71,16 @@ function openClassesText(catalog: CourseOffer[]): string {
 
 // The unit alone ("São Paulo"): offer that unit's class with date, price and seats. No greeting: the talk is under way.
 function unitOfferReply(o: CourseOffer, now: string): Reply {
+  const basedOn = [{ tool: 'get_course_offer', readAt: now }];
+  const seats = o.seatsLeft === 1 ? '1 vaga' : `${o.seatsLeft} vagas`;
+  if (o.unit === 'online') {
+    const course = `O curso online de ${o.name.replace(/\s*\(online\)$/i, '')}`;
+    if (o.seatsLeft <= 0) return { text: `${course} de ${ddmm(o.nextClass)} está sem vagas. Quer que eu avise quando abrir a próxima?`, basedOn };
+    return { text: `${course} começa em ${ddmm(o.nextClass)}, R$ ${o.price.toLocaleString('pt-BR')}, ${seats}. É esse que você procura?`, basedOn, offer: { product: o.product, unit: o.unit } };
+  }
   const place = UNIT_SHORT[o.unit] ?? `em ${o.unit}`;
   const where = place.charAt(0).toUpperCase() + place.slice(1);
-  const basedOn = [{ tool: 'get_course_offer', readAt: now }];
   if (o.seatsLeft <= 0) return { text: `${where}, a turma de ${o.name} de ${ddmm(o.nextClass)} está sem vagas. Quer que eu avise quando abrir a próxima?`, basedOn };
-  const seats = o.seatsLeft === 1 ? '1 vaga' : `${o.seatsLeft} vagas`;
   return {
     text: `${where}, a próxima turma é de ${o.name} em ${ddmm(o.nextClass)}, R$ ${o.price.toLocaleString('pt-BR')}, ${seats}. É essa que você procura?`,
     basedOn, offer: { product: o.product, unit: o.unit },
@@ -104,10 +115,10 @@ export function composeReply(ctx: ReplyContext): Reply | null {
       if (ctx.catalog) return { text: `Obrigada por contar${first ? `, ${first}` : ''}! Anotei aqui. ${openClassesText(ctx.catalog)}`, basedOn: [{ tool: 'get_course_offer', readAt: ctx.now }] };
       return { text: `Obrigada por contar${first ? `, ${first}` : ''}! Anotei aqui. Posso ajudar com mais alguma coisa?`, basedOn: [] };
     }
-    reply = { text: MENU, basedOn: [] };
+    reply = { text: menu(ctx.greeted), basedOn: [] };
   } else if (c.intent === 'course_purchase') {
     reply = ctx.offer
-      ? { text: offerText(hello, ctx.offer, ctx.now), basedOn: [{ tool: 'get_course_offer', readAt: ctx.now }] }
+      ? { text: offerText(hello, ctx.offer, ctx.now, ctx.confirmed), basedOn: [{ tool: 'get_course_offer', readAt: ctx.now }] }
       : ctx.catalog
         ? { text: `${hello}${openClassesText(ctx.catalog)}`, basedOn: [{ tool: 'get_course_offer', readAt: ctx.now }] }
         : { text: `${hello}Qual curso você procura e em qual unidade: São Paulo, Rio de Janeiro ou Campinas?`, basedOn: [] };
@@ -117,7 +128,7 @@ export function composeReply(ctx: ReplyContext): Reply | null {
     reply = { text: `${hello}Vou passar sua dúvida para o suporte ao aluno, que responde por aqui.`, basedOn: [] };
   }
   // One question, once, and only when nobody has told us yet.
-  if (ctx.fields.channel.level === 'unknown' && !ctx.conversation.originAsked && !c.declaredChannel) {
+  if (ctx.fields.channel.level === 'unknown' && !ctx.conversation.originAsked && !c.declaredChannel && !ctx.confirmed) {
     return { ...reply, text: `${reply.text} ${ORIGIN_QUESTION}`, askOrigin: true };
   }
   return reply;

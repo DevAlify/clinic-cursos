@@ -32,13 +32,19 @@ const CHANNEL_RULES: [string, RegExp][] = [
 const PRODUCT_RULES: [string, RegExp][] = [['hof', /\bharmoniza[çc][ãa]o\b/i]];
 const UNIT_RULES: [string, RegExp][] = [
   ['sp', /\b(?:sp|s[ãa]o paulo)\b/i], ['rj', /\b(?:rj|rio(?: de janeiro)?)\b/i], ['cps', /\b(?:cps|campinas)\b/i],
+  // The only online course: naming it (or "online") picks it from the list of classes.
+  ['online', /\b(?:online|intercorr[êe]ncias?)\b/i],
 ];
-const CONFIRMATION = /^\s*(?:sim|isso(?: mesmo)?|(?:[ée] )?essa(?: mesmo| mesma)?|[ée] isso|quero|pode ser|claro|com certeza)\s*[.!]*\s*$/i;
+// A yes is a short message (up to 5 words) made only of these, ignoring case, accents and punctuation.
+const YES_WORDS = new Set('sim isso mesmo e essa esse mesma quero pode ser claro com certeza ok por favor'.split(' '));
 
 // The unit a person names ("São Paulo", "rio"), or null.
 export const unitMention = (text: string): string | null => UNIT_RULES.find(([, re]) => re.test(text))?.[0] ?? null;
 // A short yes to what the clinic just offered.
-export const isConfirmation = (text: string): boolean => CONFIRMATION.test(text);
+export function isConfirmation(text: string): boolean {
+  const words = text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().split(/[^a-z]+/).filter(Boolean);
+  return words.length > 0 && words.length <= 5 && words.every((w) => YES_WORDS.has(w));
+}
 
 // Stand-in for a real model: same input and output contract, so swapping the provider changes only this file.
 export function classifyMessage(text: string): Classification {

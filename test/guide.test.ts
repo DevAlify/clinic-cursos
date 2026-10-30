@@ -81,6 +81,44 @@ test('A2 accepts the other units and abbreviations; A3 needs the offer to be the
   assert.equal(opps(getDb()), base, '"sim" after another reply confirms nothing');
 });
 
+test('A3 accepts the short ways of saying yes, each opens the offered opportunity once and ends with the hand-off', async () => {
+  for (const yes of ['Sim, quero', 'Quero sim', 'sim quero', 'Sim, essa', 'Sim por favor', 'ok', 'pode ser', 'É isso mesmo!']) {
+    const { app, getDb } = createApp({ openFresh: () => openDb() });
+    const say = typer(app, getDb, PEOPLE.daniel, NUMBERS.cps, 'cps', '2026-10-29T15:00:00-03:00');
+    await say('Quero saber de cursos');
+    await say('São Paulo');
+    const base = opps(getDb());
+    const reply = await say(yes);
+    assert.match(reply!, /^Ótimo! A turma de Harmonização Facial em São Paulo começa em 14\/11, custa R\$ 7\.900 e tem 3 vagas \(consultado no ERP às \d\d:\d\d\)\. Vou passar você para a equipe de vendas de São Paulo\.$/, yes);
+    assert.deepEqual(allOpportunities(getDb()).slice(base).map((o) => [o.product, o.unit, o.status]), [['hof', 'sp', 'open']], yes);
+    assert.equal(routes(getDb()).at(-1), 'sales-sp');
+    // A "sim" after the hand-off is not a new offer and never re-introduces the assistant.
+    assert.equal(await say('sim'), 'Não entendi bem. Você quer saber de cursos, ser paciente modelo ou tirar uma dúvida?', yes);
+    assert.equal(opps(getDb()), base + 1, yes);
+  }
+});
+
+test('A2/A3 also work for the online course: its name gets the offer from the ERP, a "sim" opens it', async () => {
+  const { app, getDb } = createApp({ openFresh: () => openDb() });
+  const say = typer(app, getDb, PEOPLE.daniel, NUMBERS.cps, 'cps', '2026-10-29T15:00:00-03:00');
+  await say('Quero saber de cursos');
+  const base = opps(getDb());
+  assert.equal(await say('Intercorrências'), 'O curso online de Intercorrências começa em 01/11, R$ 997, 999 vagas. É esse que você procura?');
+  assert.equal(opps(getDb()), base, 'an offer alone opens nothing');
+  assert.match((await say('sim'))!, /^Ótimo! A turma de Intercorrências \(online\) começa em 01\/11, custa R\$ 997 e tem 999 vagas \(consultado no ERP às \d\d:\d\d\)\. Vou passar você para a equipe de vendas\.$/);
+  assert.deepEqual(allOpportunities(getDb()).slice(base).map((o) => [o.product, o.unit, o.status]), [['intercorrencias', 'online', 'open']]);
+});
+
+test('"Quero saber de cursos" (the generic phone chip) gets the class list for Ana, with and without the Meta form step', async () => {
+  const ana = { waId: PEOPLE.ana.waId, name: PEOPLE.ana.name };
+  for (const withForm of [false, true]) {
+    const { app, getDb } = createApp({ openFresh: () => openDb() });
+    if (withForm) await runSteps(app, 'ana-meta-form');
+    const say = typer(app, getDb, ana, NUMBERS.sp, 'sp', '2026-10-29T14:00:00-03:00');
+    assert.match((await say('Quero saber de cursos'))!, /Temos turmas abertas de Harmonização Facial em São Paulo \(14\/11\).*Qual te interessa\?/, `withForm=${withForm}`);
+  }
+});
+
 test('A1 also answers "Vi no Instagram" after the origin question, and still records the origin', async () => {
   const { app, getDb } = createApp({ openFresh: () => openDb() });
   const say = typer(app, getDb, PEOPLE.daniel, NUMBERS.cps, 'cps', '2026-10-29T15:00:00-03:00');

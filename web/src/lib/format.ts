@@ -2,7 +2,7 @@ import { LEVEL_LABEL } from '../../../src/core/origin.ts';
 import type { FieldName, Level } from '../../../src/core/types.ts';
 
 const QUEUE_LABEL: Record<string, string> = {
-  'sales-sp': 'Vendas · SP', 'sales-rj': 'Vendas · Rio', 'sales-cps': 'Vendas · Campinas',
+  'sales-sp': 'Vendas · SP', 'sales-rj': 'Vendas · Rio', 'sales-cps': 'Vendas · Campinas', 'sales-online': 'Vendas · Online',
   'patients-sp': 'Pacientes · SP', 'patients-rj': 'Pacientes · Rio', 'patients-cps': 'Pacientes · Campinas',
   'student-support': 'Suporte ao aluno', 'human-priority': 'Atendimento humano · prioridade', 'clinical-team': 'Equipe clínica',
   triage: 'Triagem', reconciliation: 'Conciliação com o ERP', 'identity-review': 'Revisão de fichas',
