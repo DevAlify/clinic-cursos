@@ -1,7 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SECRETS } from '../src/config.ts';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { runScenario } from '../scenarios/run.ts';
+import { steps } from '../scenarios/steps.ts';
+import { DEFAULT_RULES, SECRETS } from '../src/config.ts';
 import { openDb } from '../src/core/db.ts';
+import { previewRules } from '../src/core/replay.ts';
+import { getState } from '../src/core/state.ts';
 import { signMeta } from '../src/gateway/signature.ts';
 import { createApp } from '../src/server.ts';
 
@@ -16,6 +23,38 @@ const waBody = (wamid: string, text: string, referral?: { source_id: string; sou
 });
 const post = (app: ReturnType<typeof fresh>['app'], path: string, body: string, headers: Record<string, string> = {}) =>
   app.request(path, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body });
+
+test('replay previews a file-backed WAL database like memory without changing the original', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'clinic-replay-'));
+  const db = openDb(join(dir, 'core.sqlite'));
+  t.after(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+  const memory = await runScenario();
+  t.after(() => memory.db.close());
+  const { app } = createApp({ openFresh: () => db });
+  for (const step of steps) {
+    const req = step.build({ db });
+    const res = await app.request(req.path, { method: req.method, headers: req.headers, body: req.body });
+    assert.ok(res.status < 400, step.id);
+  }
+  assert.equal(db.pragma('journal_mode', { simple: true }), 'wal');
+  const before = getState(db, DEFAULT_RULES);
+  const eventCount = db.prepare('SELECT COUNT(*) AS n FROM events').get();
+  const snapshot = db.serialize();
+  const next = { ...DEFAULT_RULES, attributionWindowDays: 14 };
+  const expected = previewRules(memory.db, next);
+  assert.ok(expected.length > 0, 'the demo must exercise attribution changes');
+  assert.deepEqual(previewRules(db, next), expected);
+  const response = await post(app, '/api/replay', '{"windowDays":14}');
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { changes: expected, applied: false, rules: DEFAULT_RULES });
+  assert.deepEqual(db.prepare('SELECT COUNT(*) AS n FROM events').get(), eventCount);
+  assert.deepEqual(getState(db, DEFAULT_RULES), before);
+  assert.deepEqual(db.serialize(), snapshot);
+  assert.equal(db.pragma('journal_mode', { simple: true }), 'wal');
+});
 
 test('Meta webhooks need the sha256 signature over the raw body and keep the ad referral', async () => {
   const { app, getDb } = fresh();

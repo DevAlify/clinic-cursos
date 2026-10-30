@@ -28,7 +28,11 @@ function summary(db: Db, seq: number | null): TouchSummary | null {
 
 // Rebuilds an in-memory copy with the new rules and lists what changes. The live database is untouched.
 export function previewRules(db: Db, next: Rules): AttributionChange[] {
-  const copy = new Database(db.serialize());
+  const snapshot = db.serialize();
+  // SQLite deserialization cannot open WAL images. Set only the copy's read/write versions to rollback mode.
+  snapshot[18] = 1;
+  snapshot[19] = 1;
+  const copy = new Database(snapshot);
   try {
     rebuild(copy, next);
     return allOpportunities(db).flatMap((before) => {
