@@ -39,7 +39,7 @@ const daniel = (key: string, text: string, at: string): Message => ({ id: messag
 const noUtm = (key: 'felipe' | 'gabriela' | 'helena', time: string) =>
   form(`form-${key}-0001`, 'cps-lp-hof-01', brt(`2026-10-29T${time}`), PEOPLE[key], {}, { gclid: `GCLID-${key.toUpperCase()}` });
 
-function anaPersonId(db: Db): string | null {
+export function anaPersonId(db: Db): string | null {
   const hash = hashIdentifier('phone', normalizePhone(PEOPLE.ana.phone, false)!);
   return (db.prepare("SELECT person_id FROM identifiers WHERE kind = 'phone' AND hash = ?").get(hash) as { person_id: string } | undefined)?.person_id ?? null;
 }

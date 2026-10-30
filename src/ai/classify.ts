@@ -17,7 +17,7 @@ export const INTENT_LABEL: Record<Intent, string> = {
 
 // Order matters: sensitive subjects win over sales words in the same message.
 const INTENT_RULES: [Intent, RegExp][] = [
-  ['clinical_question', /\b(dor|inchad\w*|incha[çc]o|hematoma|rea[çc][ãa]o|alergia|febre)\b/i],
+  ['clinical_question', /\b(dor|inchad\w*|incha[çc]o|hematoma|rea[çc][ãa]o|alergia|febre|intercorr[êe]ncia)\b/i],
   ['complaint', /\b(reclama\w*|insatisfeit\w*|p[ée]ssim\w*|absurd\w*|procon)\b/i],
   ['patient_booking', /\b(paciente|modelo|agendar)\b/i],
   ['student_question', /\b(aluno|aluna|certificado|apostila)\b/i],
@@ -30,6 +30,21 @@ const CHANNEL_RULES: [string, RegExp][] = [
   ['tiktok', said('tiktok')], ['youtube', said('youtube')],
 ];
 const PRODUCT_RULES: [string, RegExp][] = [['hof', /\bharmoniza[çc][ãa]o\b/i]];
+const UNIT_RULES: [string, RegExp][] = [
+  ['sp', /\b(?:sp|s[ãa]o paulo)\b/i], ['rj', /\b(?:rj|rio(?: de janeiro)?)\b/i], ['cps', /\b(?:cps|campinas)\b/i],
+  // The only online course: naming it (or "online") picks it from the list of classes.
+  ['online', /\b(?:online|intercorr[êe]ncias?)\b/i],
+];
+// A yes is a short message (up to 5 words) made only of these, ignoring case, accents and punctuation.
+const YES_WORDS = new Set('sim isso mesmo e essa esse mesma quero pode ser claro com certeza ok por favor'.split(' '));
+
+// The unit a person names ("São Paulo", "rio"), or null.
+export const unitMention = (text: string): string | null => UNIT_RULES.find(([, re]) => re.test(text))?.[0] ?? null;
+// A short yes to what the clinic just offered.
+export function isConfirmation(text: string): boolean {
+  const words = text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().split(/[^a-z]+/).filter(Boolean);
+  return words.length > 0 && words.length <= 5 && words.every((w) => YES_WORDS.has(w));
+}
 
 // Stand-in for a real model: same input and output contract, so swapping the provider changes only this file.
 export function classifyMessage(text: string): Classification {

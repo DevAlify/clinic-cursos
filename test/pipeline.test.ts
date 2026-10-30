@@ -154,6 +154,22 @@ test('opportunities only move forward, won comes only from the ERP, and lost is 
   assert.match(String(((await callTool(db, 'advance_opportunity', { opportunityId, stage: 'proposal', reason: 'x' }, 'ai:simulated-v1', R, NOW)) as { error: string }).error), /permissão negada/);
 });
 
+test('an attendant opening a second product or unit on the same message opens a new opportunity; the same one is not duplicated', async () => {
+  const db = setup();
+  const { personId } = await anaConversation(db, fakeWaha());
+  const open = (unit: string) => callTool(db, 'open_opportunity', { personId, product: 'hof', unit, confidence: null, triggerSeq: 7 }, 'attendant:joana', R, NOW) as Promise<{ ok: true; result: { opportunityId: string | null } }>;
+  const rj = await open('rj');
+  assert.equal(rj.ok, true);
+  await callTool(db, 'advance_opportunity', { opportunityId: rj.result.opportunityId, stage: 'lost', reason: 'teste' }, 'attendant:joana', R, NOW);
+  const cps = await open('cps');
+  assert.notEqual(cps.result.opportunityId, null);
+  assert.notEqual(cps.result.opportunityId, rj.result.opportunityId);
+  assert.deepEqual(getState(db, R).opportunities.map((o) => [o.unit, o.status]), [['sp', 'open'], ['rj', 'lost'], ['cps', 'open']]);
+  const before = maxSeq(db);
+  await open('cps');
+  assert.equal(maxSeq(db), before, 'the same product and unit on the same message is still one event');
+});
+
 test('pre-enrollment creates the ERP order once, with the contact from the vault', async () => {
   const db = setup();
   const { opportunityId } = await anaConversation(db, fakeWaha());

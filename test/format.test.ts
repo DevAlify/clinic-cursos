@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { channelLabel, fieldValueLabel, formatBrt, formatClock, howWeKnew, levelLabel, percent, plainLabel, queueLabel, stageLabel } from '../web/src/lib/format.ts';
-import { journeyReached } from '../web/src/lib/journey.ts';
+import { hasOpenOpportunity, journeyReached } from '../web/src/lib/journey.ts';
 
 test('labels and numbers read in Portuguese', () => {
   assert.equal(levelLabel('declared'), 'declarada');
@@ -30,6 +30,12 @@ test('the step bar follows what the conversation has reached', () => {
   assert.equal(journeyReached({ messages: [...inbound, { direction: 'out' }], opportunities: [opp('proposal')] }), 2);
   assert.equal(journeyReached({ messages: inbound, opportunities: [opp('pre_enrollment', 'ERP-ORD-0001')] }), 3);
   assert.equal(journeyReached({ messages: inbound, opportunities: [opp('won', 'ERP-ORD-0001', 'ERP-SALE-1001')] }), 4);
+});
+
+test('Abrir oportunidade is offered unless an opportunity is open', () => {
+  assert.equal(hasOpenOpportunity([]), false);
+  assert.equal(hasOpenOpportunity([{ status: 'won' }, { status: 'lost' }]), false);
+  assert.equal(hasOpenOpportunity([{ status: 'lost' }, { status: 'open' }]), true);
 });
 
 test('"como soubemos" explains who read the field in plain words', () => {

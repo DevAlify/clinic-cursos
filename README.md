@@ -41,10 +41,12 @@ Cada serviço é um processo (ou contêiner) com porta, banco e variáveis próp
 
 O caminho de uma venda, do começo ao fim. Para ver a origem observada, comece pelo anúncio: no Bastidores, rode o roteiro até "Ana · Clica no anúncio da Meta e preenche a LP de SP". Sem esse passo, a conversa começa sem link rastreado, e a origem só aparece se a pessoa responder à pergunta da IA.
 
-1. No "celular do lead" (`waha`, :3200), a pessoa manda uma mensagem. O simulador monta o webhook do WAHA, assina com HMAC sha512 e entrega ao `core`.
-2. O `core` identifica a origem, abre a conversa e a oportunidade, e responde pelo WhatsApp (a resposta chega ao celular pela rota de envio do WAHA). O preço e as vagas da resposta vêm do `erp`.
+1. No "celular do lead" (`waha`, :3200), a pessoa manda uma mensagem; o celular mostra as turmas abertas lidas do `erp`, como atalho para a conversa. O simulador monta o webhook do WAHA, assina com HMAC sha512 e entrega ao `core`.
+2. O `core` identifica a origem, abre a conversa e a oportunidade, e responde pelo WhatsApp (a resposta chega ao celular pela rota de envio do WAHA). O preço e as vagas da resposta vêm do `erp`. Quem pergunta de cursos sem dizer qual recebe a lista das turmas abertas; se responder só a unidade, recebe a turma dela, e um "sim" abre a oportunidade (a atendente também pode abri-la pelo botão "Abrir oportunidade").
 3. A atendente avança a etapa e registra a pré-matrícula: o `core` cria o pedido no `erp` (:3100) com o id da oportunidade.
 4. No `erp`, "Confirmar pagamento" baixa a vaga e avisa o `core` pelo webhook de venda; a oportunidade fica ganha e leva a origem que o sistema conseguiu provar: observada, se a pessoa veio de um link rastreado (anúncio, QR, formulário); declarada, se respondeu à pergunta da IA; desconhecida, se nada disso aconteceu.
+
+O botão "Guia da demo", no produto, mostra em que passo do roteiro da Ana a demo está (origem, mensagem, atendimento, venda no ERP e CRM) e o que fazer a seguir; o `core` calcula o estado em `GET /api/guide`, e o celular do lead também lê as turmas abertas pelo `erp`.
 
 ## Provedor de WhatsApp: Meta ou WAHA
 
@@ -141,7 +143,7 @@ Além dos sete cenários, `verify` confere três extras: o log não guarda dado 
 - o núcleo: log de eventos só de acréscimo, cofre de dados pessoais, identidade por igualdade exata, origem com nível de certeza, atribuição, monitor de cobertura, reprocessamento e prévia de regra nova;
 - as regras v1: janela de atribuição de 30 dias, limite de confiança da IA de 0,85, e alerta quando os 3 últimos leads de um ponto chegam sem campanha (com base de pelo menos 10 leads em 30 dias e cobertura de base de pelo menos 90%);
 - as doze ferramentas tipadas (`explain_origin`, `origin_coverage`, `get_course_offer`, `route_conversation`, `open_opportunity`, `record_declared_origin`, `propose_merge`, `set_entry_point_status`, e as do atendente: `reply_to_conversation`, `set_conversation_mode`, `advance_opportunity`, `request_enrollment`), que pessoas, simulador e agentes de IA usam pelo mesmo caminho;
-- a porta HTTP (webhooks do WhatsApp (Meta e WAHA), do formulário e do ERP, o redirecionador de QR e links, e a API do produto), com a conferência da assinatura (Meta: sha256; WAHA: sha512) e do token do ERP;
+- a porta HTTP (webhooks do WhatsApp (Meta e WAHA), do formulário e do ERP, o redirecionador de QR e links, e a API do produto, incluindo `GET /api/catalog`, as turmas lidas do ERP, e `GET /api/guide`, o passo atual do roteiro da demo), com a conferência da assinatura (Meta: sha256; WAHA: sha512) e do token do ERP;
 - o protocolo entre os serviços: o webhook e a rota de envio do WAHA, e o pedido e o webhook de venda do ERP.
 
 **Simulado:**

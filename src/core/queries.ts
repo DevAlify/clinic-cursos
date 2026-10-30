@@ -93,6 +93,19 @@ export function lastInboundProvider(db: Db, personId: string, businessNumber: st
   return row?.provider ?? null;
 }
 
+// The class the clinic's latest message in this conversation asked the person to confirm, read from the log.
+export function lastOfferOf(db: Db, personId: string, businessNumber: string): { product: string; unit: string } | null {
+  const row = db.prepare(`SELECT json_extract(e.payload, '$.offer') AS offer FROM messages m JOIN events e ON e.seq = m.seq
+    WHERE m.person_id = ? AND m.business_number = ? AND m.direction = 'out' ORDER BY m.seq DESC LIMIT 1`).get(personId, businessNumber) as { offer: string | null } | undefined;
+  return row?.offer ? JSON.parse(row.offer) : null;
+}
+
+export const hasSentIn = (db: Db, personId: string, businessNumber: string): boolean =>
+  db.prepare("SELECT 1 FROM messages WHERE person_id = ? AND business_number = ? AND direction = 'out'").get(personId, businessNumber) !== undefined;
+
+export const hasOpenOpportunity = (db: Db, personId: string): boolean =>
+  db.prepare("SELECT 1 FROM opportunities WHERE person_id = ? AND status = 'open'").get(personId) !== undefined;
+
 // Contact read from the vault, only for an action that needs it (sending a message, creating an ERP order).
 export function contactOf(db: Db, personId: string): { name: string | null; phone: string | null; email: string | null } {
   const ref = (kind: string) => (db.prepare('SELECT pii_ref FROM identifiers WHERE person_id = ? AND kind = ? ORDER BY rowid LIMIT 1').get(personId, kind) as { pii_ref: string | null } | undefined)?.pii_ref ?? null;

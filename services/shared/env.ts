@@ -27,4 +27,6 @@ export const wahaEnv = () => ({
   hmacKey: read('WAHA_WEBHOOK_HMAC_KEY', 'demo-waha-hmac'),
   sessions: parseSessions(read('WAHA_SESSIONS', 'sp:551130000001,rj:552130000002,cps:551930000003')),
   coreUrl: coreUrl(),
+  // The phone page lists the open classes from the ERP: ERP_URL, or localhost on ERP_PORT.
+  erpUrl: read('ERP_URL', `http://localhost:${read('ERP_PORT', '3100')}`),
 });
