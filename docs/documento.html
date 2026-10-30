@@ -36,6 +36,7 @@ code { font: 0.92em ui-monospace, "Cascadia Mono", Consolas, monospace; backgrou
 .cols > * > :last-child { margin-bottom: 0; }
 .c-2-1 { grid-template-columns: 1.5fr 1fr; }
 .c-1-1 { grid-template-columns: 1fr 1fr; }
+.c-4-3 { grid-template-columns: 1.3fr 1fr; }
 .sum li { margin-bottom: 0.8mm; }
 .k { background: #f7f7f5; }
 figure { margin: 0 0 1.3mm; }
@@ -49,13 +50,13 @@ figcaption { color: #555; font-size: 8pt; line-height: 1.35; margin-top: 0.6mm; 
 <!-- ===================== PÁGINA 1 ===================== -->
 <section class="page" id="p1">
 <h1>Clinic Cursos: garantir a origem do lead antes de ligar o CRM</h1>
-<p class="meta">Desafio Product Builder / FDE · 29/10/2026 · para o fundador e a banca · dados e exemplos fictícios, sem acesso aos sistemas da Clinic. Ultrapassei o limite sugerido de 4 horas; o tempo por atividade está em docs/registro.md.</p>
+<p class="meta">Desafio Product Builder / FDE · 30/10/2026 · para o fundador e a banca · dados e exemplos fictícios, sem acesso aos sistemas da Clinic. Passei das 4 horas sugeridas; o tempo dedicado por atividade e o critério de medição estão em docs/registro.md.</p>
 
 <h2>1. Diagnóstico, perguntas e premissas</h2>
 <ol class="sum">
 <li>A origem do lead (anúncio, QR code, indicação ou conversa direta) se perde pelo caminho. Ligar o CRM antes de medir isso guarda contatos sem origem, e a origem perdida não volta.</li>
 <li>Proponho um núcleo de dados próprio: cada contato vira um evento num log (diário em que nada se apaga), e a origem entra em cinco campos, cada um com o seu nível de prova.</li>
-<li>A demo é o sistema central em uso: três serviços locais (núcleo, ERP e WhatsApp, os dois últimos simulados) fecham o circuito WhatsApp, CRM, ERP e CRM. Com Node 24.12 ou superior, <code>npm run demo</code> sobe tudo e <code>npm run verify</code> termina com “36 de 36 verificações passaram”. Simulados: WhatsApp, ERP e IA. Reais: núcleo, regras, agente, ferramentas e a integração entre os serviços.</li>
+<li>A demo é o sistema central em uso: três serviços locais (núcleo, simulador de WhatsApp e ERP simulado) fecham o circuito WhatsApp, CRM, ERP e CRM. Com Node 24.12 ou superior, <code>npm run demo</code> sobe os três; <code>npm run verify</code> confere só o núcleo, sem rede, e termina com “36 de 36 verificações passaram”. Simulados: WhatsApp, ERP e IA. Reais: núcleo, regras, agente, ferramentas e a integração entre os serviços.</li>
 <li>Plano: em 2 semanas, inventário, padrão de nomes e quatro pontos corrigidos; em 30 dias, um piloto liberado por critérios medidos; em 90 dias, as três unidades e a triagem por IA.</li>
 </ol>
 
@@ -107,26 +108,26 @@ figcaption { color: #555; font-size: 8pt; line-height: 1.35; margin-top: 0.6mm; 
 
 <table>
 <tbody>
-<tr><td class="k" style="width:22mm">1. Inventário e auditoria</td><td>Listo páginas (mapa do site e rastreador de páginas), formulários, links de WhatsApp, contas de anúncio, contêiner do GTM, produtos da Hotmart, redes sociais, YouTube, blog e fotos dos materiais de cada unidade. Tags duplicadas: o rastreador lista os scripts de cada página e a prévia do GTM confirma. Eventos ausentes: um lead de teste por página. Redirecionamentos que perdem origem: o rastreador segue cada um com UTMs de teste e compara a URL final. Entradas sem identificação: relatório de leads sem UTM no RD, por formulário. Saída: planilha de ativos, cada um com dono e status “em auditoria”.</td></tr>
-<tr><td class="k">2. Padrão e correção</td><td>Cinco campos em todo canal: canal, campanha, unidade, produto e ponto de entrada. Campanha: <code>unidade_produto_objetivo_aaaamm</code> (<code>cps_hof_captacao_202610</code>: Campinas, harmonização, captação, outubro de 2026). Ponto de entrada: <code>unidade-tipo-local-nn</code> (<code>sp-banner-recepcao-01</code>: SP, banner, recepção, nº 1). Unidades <code>sp</code>, <code>rj</code>, <code>cps</code>, <code>online</code>; minúsculas, sem acento. Um gerador de links obrigatório cria a URL com UTMs, o link de WhatsApp com código, o QR dinâmico (aponta para um endereço nosso, que registra a leitura e redireciona) e o link da Hotmart, e cadastra o ponto como “em auditoria”. Cada link leva um código curto (ex.: K7P2) que o núcleo traduz nos cinco campos. Prioridade: volume × gravidade. Executam: marketing (anúncios, links), desenvolvedor do site (LPs, formulários), recepções (materiais físicos). Valor fora do padrão gera alerta.</td></tr>
-<tr><td class="k">3. Preservação da jornada</td><td>No site, UTM, gclid e fbclid (códigos que Google e Meta acrescentam ao link do anúncio) são capturados no primeiro acesso e vão com o formulário. No WhatsApp, o código curto vai no texto pronto da mensagem. No ERP, o id da oportunidade vai na matrícula. Cada contato é um toque (fato registrado) da mesma pessoa, identificada por telefone e e-mail, então trocar de dispositivo não muda a ficha. O retorno direto segue a regra de atribuição (janela de 30 dias). Dois produtos de interesse geram duas oportunidades. Contato direto, orgânico ou indicação não têm link rastreável: a origem fica desconhecida até a atendente perguntar, com opções, e a resposta entra como declarada.</td></tr>
-<tr><td class="k">4. Validação e manutenção</td><td>Teste ponta a ponta por ponto (um lead de teste percorre o caminho do clique ao registro), conciliação semanal entre o que as plataformas contam e o que o núcleo registrou, monitor com alertas que têm dono e revisão mensal de 60 leads e da matriz (página 3). Privacidade: nenhum dado pessoal em URL (exigência do Google Analytics, 28/10/2026), consentimento por finalidade e dado de saúde fora dos anúncios.</td></tr>
+<tr><td class="k" style="width:22mm">1. Inventário e auditoria</td><td>Listo páginas (mapa do site e rastreador de páginas), formulários, links de WhatsApp, contas de anúncio, contêiner do GTM, propriedade e eventos de conversão do Google Analytics (GA4), comparados com a contagem das plataformas (tag do GTM instalada não prova que o evento chegou), produtos da Hotmart, redes sociais, YouTube, blog e fotos dos materiais de cada unidade. Tags duplicadas: o rastreador lista os scripts de cada página e a prévia do GTM confirma. Eventos ausentes: um lead de teste por página. Redirecionamentos que perdem origem: o rastreador segue cada um com UTMs de teste e compara a URL final. Entradas sem identificação: relatório de leads sem UTM no RD, por formulário. Saída: planilha de ativos, cada um com dono e status “em auditoria”.</td></tr>
+<tr><td class="k">2. Padrão e correção</td><td>Cinco campos em todo canal: canal, campanha, unidade, produto e ponto de entrada. Campanha: <code>unidade_produto_objetivo_aaaamm</code> (ex.: <code>cps_hof_captacao_202610</code>). Ponto de entrada: <code>unidade-tipo-local-nn</code> (ex.: <code>sp-banner-recepcao-01</code>). Unidades <code>sp</code>, <code>rj</code>, <code>cps</code>, <code>online</code>; minúsculas, sem acento. Um gerador de links obrigatório cria a URL com UTMs, o link de WhatsApp com código, o QR dinâmico (aponta para um endereço nosso, que registra a leitura e redireciona) e o link da Hotmart, e cadastra o ponto como “em auditoria”. Cada link leva um código curto (ex.: K7P2) que o núcleo traduz nos cinco campos. Prioridade: volume × gravidade. Executam: marketing (anúncios, links), desenvolvedor do site (LPs, formulários), recepções (materiais físicos).</td></tr>
+<tr><td class="k">3. Preservação da jornada</td><td>No site, UTM, gclid e fbclid (códigos que Google e Meta acrescentam ao link do anúncio) são capturados no primeiro acesso e vão com o formulário. No WhatsApp, o código curto vai no texto pronto da mensagem. No ERP, o id da oportunidade vai na matrícula. Cada contato é um toque (fato registrado). Trocar de dispositivo mantém a mesma ficha quando há identificador comum (telefone ou e-mail); sem ele, ficam duas fichas e uma pessoa decide. O retorno direto segue a regra de atribuição (janela de 30 dias). Dois produtos de interesse geram duas oportunidades. Orgânico com link identificado entra como observada. Contato direto, orgânico sem link e indicação ficam desconhecidos até a atendente perguntar, com opções, e a resposta entra como declarada.</td></tr>
+<tr><td class="k">4. Validação e manutenção</td><td>Teste ponta a ponta por ponto (um lead de teste percorre o caminho do clique até a venda confirmada no ERP), conciliação semanal entre o que as plataformas contam e o que o núcleo registrou, monitor com alertas que têm dono e revisão mensal de 60 leads e da matriz (página 3). Privacidade: sem dado pessoal em URL (regra do Google Analytics, 28/10/2026), com consentimento por finalidade e dado de saúde fora dos anúncios.</td></tr>
 </tbody>
 </table>
 
-<p>Níveis de origem. <em>Observada</em>: o sistema leu a prova (Ana veio de um anúncio da Meta, com fbclid e UTMs). <em>Declarada</em>: a pessoa contou (Daniel escreveu “vi no insta”). <em>Inferida</em>: uma regra deduziu (mensagem ao número de Campinas indica a unidade Campinas). <em>Desconhecida</em>: não há prova (Daniel chegou sem código; lead importado do histórico do ERP). Cada campo guarda quem o leu: sistema, regra versionada, atendente ou IA. “Desconhecida” nunca vira “direto”, e o que falta não é completado. Histórico importado entra como desconhecido, com o lote. Só se recupera origem com prova, como a campanha buscada pelo gclid na API do Google Ads (cliques de até 90 dias; testar antes; 29/10/2026).</p>
+<p>Níveis de origem. <em>Observada</em>: o sistema leu a prova (Ana, de um anúncio da Meta, com fbclid e UTMs). <em>Declarada</em>: a pessoa contou (Daniel escreveu “vi no insta”). <em>Inferida</em>: uma regra deduziu (mensagem ao número de Campinas indica a unidade). <em>Desconhecida</em>: sem prova (Daniel sem código; histórico importado do ERP, com o lote). “Desconhecida” nunca vira “direto”, e o que falta não é completado. Só se recupera origem com prova, como a campanha buscada pelo gclid na API do Google Ads (até 90 dias; testar antes; 29/10/2026).</p>
 
 <table>
-<thead><tr><th style="width:28mm">Ponto de entrada</th><th style="width:34mm">Problema hipotético</th><th style="width:50mm">Correção</th><th style="width:24mm">Responsável</th><th>Evidência de validação</th></tr></thead>
+<thead><tr><th style="width:24mm">Ponto de entrada</th><th style="width:32mm">Problema hipotético</th><th style="width:48mm">Correção</th><th style="width:24mm">Responsável</th><th>Evidência de validação</th></tr></thead>
 <tbody>
 <tr><td>LP de Campinas (Google Ads)</td><td>A republicação apagou o campo das UTMs.</td><td>Capturar UTMs e gclid ao abrir a página; campo obrigatório; teste diário.</td><td>Marketing e desenvolvedor do site</td><td>Lead de teste com campanha observada; cobertura ≥ 95% por 14 dias.</td></tr>
-<tr><td>Banner com QR, recepção do Rio (físico)</td><td>O QR abre um WhatsApp genérico, sem código.</td><td>QR dinâmico com código curto no texto da mensagem.</td><td>Recepção do Rio e marketing</td><td>Leituras do QR batem com as mensagens que chegam com código.</td></tr>
+<tr><td>Banner com QR, recepção do Rio (físico)</td><td>O QR abre um WhatsApp genérico, sem código.</td><td>QR dinâmico com código curto no texto da mensagem.</td><td>Recepção do Rio e marketing</td><td>Leitura do QR, mensagem com código e oportunidade conferidas em sequência (nem toda leitura vira mensagem).</td></tr>
 <tr><td>Anúncio da Meta que abre o WhatsApp</td><td>O atendimento atual não guarda o dado do anúncio.</td><td>O núcleo recebe o webhook (aviso automático da Meta) e grava o anúncio de origem.</td><td>Atendimento e integração</td><td>Anúncio de teste gera conversa com o id do anúncio gravado.</td></tr>
 <tr><td>Checkout da Hotmart</td><td>Link sem <code>sck</code> (campo de origem da Hotmart): venda sem origem.</td><td>O gerador põe o código curto no <code>sck</code> (até 30 caracteres, sem underscore; Hotmart, 28/10/2026).</td><td>Marketing digital</td><td>Compra de teste chega com o <code>sck</code> no webhook.</td></tr>
 </tbody>
 </table>
 
-<div class="answer"><strong>Resposta objetiva:</strong> listo os pontos de entrada, padronizo os cinco campos com um gerador de links e corrijo primeiro o que mais perde origem. A origem fica com o nível de prova, o que falta fica “desconhecido”, e nenhum ponto alimenta o CRM antes do teste ponta a ponta.</div>
+<div class="answer"><strong>Resposta objetiva:</strong> listo os pontos de entrada, padronizo os campos com um gerador de links e corrijo o que mais perde origem. O que falta fica “desconhecido”; o CRM só recebe pontos testados do clique à venda.</div>
 </section>
 
 <!-- ===================== PÁGINA 3 ===================== -->
@@ -134,36 +135,36 @@ figcaption { color: #555; font-size: 8pt; line-height: 1.35; margin-top: 0.6mm; 
 <h2>3. Liberação do piloto, monitoramento e cronograma</h2>
 
 <table>
-<thead><tr><th style="width:36mm">Critério de liberação</th><th style="width:66mm">Limite</th><th>Por quê</th></tr></thead>
+<thead><tr><th style="width:34mm">Critério</th><th style="width:78mm">Limite</th><th>Por quê</th></tr></thead>
 <tbody>
-<tr><td>Teste ponta a ponta</td><td>100% dos pontos do piloto</td><td>Cada ponto prova o caminho do clique até a ficha.</td></tr>
-<tr><td>Cobertura</td><td>≥ 95% dos leads do piloto com canal e campanha observados, por 14 dias seguidos</td><td>Duas semanas cobrem dois ciclos semanais. WhatsApp direto sem código nunca terá canal observado.</td></tr>
-<tr><td>Amostra à mão</td><td>60 leads seguidos, zero erro de origem (nível ou valor diferente do da fonte)</td><td>Regra de três: zero erro em 60 casos dá 95% de confiança de que o erro real é menor que 5%.</td></tr>
+<tr><td>Teste ponta a ponta</td><td>100% dos pontos do piloto</td><td>Prova o caminho do clique até a venda.</td></tr>
+<tr><td>Cobertura</td><td>≥ 95% de canal e campanha observados nas entradas de campanha rastreáveis do piloto (lista fixada antes de medir), por 14 dias seguidos</td><td>Dois ciclos semanais. Contatos sem prova ficam à parte (desconhecida ou declarada) e contam no total geral.</td></tr>
+<tr><td>Amostra à mão</td><td>60 leads seguidos, espalhados pelos pontos do piloto, zero erro de origem (nível ou valor diferente do da fonte)</td><td>Regra de três: zero erro em 60 dá 95% de confiança de erro abaixo de 5%, com erros independentes e amostra representativa.</td></tr>
 <tr><td>Identidade</td><td>Nenhuma ficha misturando duas pessoas; no máximo uma duplicada na amostra</td><td>Misturar pessoas é o erro caro; duplicar custa pouco.</td></tr>
-<tr><td>Conciliação semanal</td><td>Diferença ≤ 5% entre plataformas e núcleo; toda venda do ERP aparece no núcleo</td><td>Prova que nada se perde no caminho.</td></tr>
+<tr><td>Conciliação semanal</td><td>Diferença ≤ 5% entre eventos comparáveis (mesma janela e fuso; clique não é lead); toda venda do ERP aparece no núcleo</td><td>Prova que nada se perde no caminho.</td></tr>
 <tr><td>Privacidade</td><td>Nenhum dado pessoal em URL nem dado de paciente enviado a anúncios</td><td>LGPD art. 11; Termos das Business Tools da Meta §1.h (28/10/2026).</td></tr>
-<tr><td>Caminho de volta</td><td>Formulários voltam direto ao RD em menos de 1 hora</td><td>O piloto recua sem parar a operação.</td></tr>
+<tr><td>Caminho de volta</td><td>Formulários voltam ao RD em menos de 1 hora</td><td>O piloto recua sem parar a operação.</td></tr>
 </tbody>
 </table>
 
 <h3>Monitor, alertas e proteção do piloto</h3>
-<p>Se os 3 últimos leads de um ponto chegam sem campanha e, nos 30 dias anteriores, pelo menos 90% dos leads dele vinham com campanha (base mínima de 10 leads), o monitor avisa com ação e responsável e rebaixa o ponto para “em auditoria”. Com cobertura normal de 96%, três faltas seguidas por acaso ocorrem cerca de uma vez em 15 mil leads. O lead de ponto não liberado entra e é atendido, sem disparar automação nem entrar nos indicadores de campanha. Rebaixar é automático; liberar exige uma pessoa, após teste ponta a ponta. O piloto exige só os pontos escolhidos corrigidos; a expansão repete o checklist.</p>
+<p>Se os 3 últimos leads de um ponto chegam sem campanha e, nos 30 dias anteriores, pelo menos 90% dos leads dele vinham com campanha (base mínima de 10), o monitor avisa com ação e responsável e rebaixa o ponto para “em auditoria”. Com cobertura normal de 96% e falhas independentes, três faltas seguidas por acaso são raras; o limite se calibra no piloto. Lead de ponto não liberado é atendido, sem disparar automação nem entrar nos indicadores de campanha. Rebaixar é automático; liberar exige uma pessoa e teste ponta a ponta. O piloto exige só os pontos escolhidos; a expansão repete o checklist.</p>
 
-<p>Cronograma. Recorte das 2 semanas: inventário de tudo, 4 pontos corrigidos e validados, núcleo em modo sombra (recebe cópia dos eventos e não age). Responsável: o profissional dedicado, com marketing, depois com a unidade piloto e as três unidades. Esforço: estimativa minha.</p>
+<p>Cronograma (horas incrementais, estimativa minha). Em cada fase, o profissional dedicado executa, a coordenação da unidade valida e o fundador libera. Se o acesso (P2) atrasar, o primeiro corte é o número de pontos corrigidos, não a validação.</p>
 <table>
-<thead><tr><th style="width:22mm"></th><th style="width:53mm">2 semanas (~80 h)</th><th style="width:53mm">30 dias (~80 h)</th><th>90 dias (~360 h)</th></tr></thead>
+<thead><tr><th style="width:22mm"></th><th style="width:50mm">2 semanas (~80 h)</th><th style="width:44mm">30 dias (+~80 h)</th><th>90 dias (+~360 h)</th></tr></thead>
 <tbody>
 <tr><td class="k">Problema</td><td>Não se sabe o que existe nem onde a origem se perde.</td><td>O CRM não pode ligar sem dado confiável.</td><td>Dependência de fornecedores e de dado incompleto.</td></tr>
-<tr><td class="k">Entrega</td><td>Inventário com donos; padrão e gerador; 4 pontos corrigidos; núcleo em modo sombra.</td><td>Piloto liberado pelo checklist; ficha e filas em uso; venda do ERP ligada à jornada.</td><td>3 unidades liberadas; triagem por IA; primeiras análises do Grande Cérebro.</td></tr>
+<tr><td class="k">Entrega</td><td>Inventário com donos; padrão e gerador; 4 pontos corrigidos; núcleo em modo sombra (copia os eventos, sem agir).</td><td>Piloto liberado pelo checklist; ficha e filas em uso; venda do ERP ligada à jornada.</td><td>3 unidades liberadas; triagem por IA; lote piloto de pacientes do legado (acesso restrito, validado pela coordenação clínica, após P7); Grande Cérebro.</td></tr>
 <tr><td class="k">Dependências e riscos</td><td>Acessos (P2) e desenvolvedor do site; risco de atraso em ambos.</td><td>ERP (P4); volume baixo atrasa a amostra de 60.</td><td>Piloto estável e jurídico (IA, dado de saúde); adesão das equipes.</td></tr>
 <tr><td class="k">Conclusão e métrica</td><td>4 pontos com teste ponta a ponta aprovado; cobertura por ponto (linha de base).</td><td>Checklist cumprido; cobertura ≥ 95% nos pontos do piloto.</td><td>3 unidades cumprem o checklist; tempo de resposta e acerto da triagem.</td></tr>
 </tbody>
 </table>
 
 <h3>Paralelismo com uma pessoa, transição e recuo</h3>
-<p>Durante a auditoria monto o núcleo em modo sombra, o gerador de links e o painel de cobertura. Depois do padrão de nomes, corrijo ativos antigos e configuro automações. Só após a validação entram o CRM comercial, as automações e a IA com o cliente. A migração é gradual, ponto a ponto: o formulário envia ao núcleo, que repassa ao RD, e o atendimento fica com o fornecedor atual até o piloto provar o novo. Duplicidades: só igualdade exata une fichas, com decisão humana na dúvida; histórico incompleto entra como desconhecido, com o lote. Recuo: nada a desfazer até o piloto; no piloto, formulários direto ao RD em 1 hora; na expansão, o atendimento volta ao fornecedor e os dados seguem no log.</p>
+<p>Durante a auditoria preparo o gerador de links e o painel de cobertura; depois do padrão de nomes, corrijo ativos antigos; só após a validação ligo o CRM comercial, as automações e a IA com o cliente. A migração é gradual, ponto a ponto: o formulário envia ao núcleo, que repassa ao RD, e o atendimento fica com o fornecedor atual até o piloto provar o novo. Duplicidades: só igualdade exata une fichas; histórico incompleto entra como desconhecido, com o lote. No corte, uma só caixa responde cada conversa, e as abertas são conferidas antes da troca e do recuo. Recuo: no piloto, formulários direto ao RD; na expansão, o atendimento volta ao fornecedor.</p>
 
-<div class="answer"><strong>Resposta objetiva:</strong> o CRM só abre para pontos que passam em sete critérios medidos, como 95% de cobertura por 14 dias e 60 leads sem erro de origem (limites iniciais, ajustáveis). Entrego quatro pontos corrigidos em 2 semanas, o piloto em 30 dias e as três unidades em 90.</div>
+<div class="answer"><strong>Resposta objetiva:</strong> o CRM só abre para pontos que passam em sete critérios medidos, ajustáveis.</div>
 </section>
 
 <!-- ===================== PÁGINA 4 ===================== -->
@@ -173,7 +174,7 @@ figcaption { color: #555; font-size: 8pt; line-height: 1.35; margin-top: 0.6mm; 
 <figure>
 <svg viewBox="-1 -1 722 216" role="img" aria-labelledby="fig-t fig-d" xmlns="http://www.w3.org/2000/svg">
 <title id="fig-t">Desenho do núcleo de dados e das integrações</title>
-<desc id="fig-d">Formulário, QR, Hotmart e o provedor de WhatsApp (Meta oficial ou WAHA) entram por uma porta que grava no log de eventos. O log alimenta projeções, e as ferramentas servem pessoas e agentes de IA. As decisões voltam ao log como eventos. Abaixo, ERP, atendimento, RD, Meta, Google e agentes ligam-se ao núcleo nos dois sentidos. Na demo, núcleo, ERP e simulador do WhatsApp são três serviços locais.</desc>
+<desc id="fig-d">Formulário, QR, Hotmart e o WhatsApp (API oficial da Meta) entram por uma porta que grava no log de eventos. O log alimenta projeções, e as ferramentas servem pessoas e agentes de IA. As decisões voltam ao log como eventos. Abaixo, ERP, atendimento, RD, Meta, Google e agentes ligam-se ao núcleo nos dois sentidos. Na demo, núcleo, ERP e um simulador do WhatsApp são três serviços locais.</desc>
 <defs>
 <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#1a1a1a"/></marker>
 </defs>
@@ -181,16 +182,16 @@ figcaption { color: #555; font-size: 8pt; line-height: 1.35; margin-top: 0.6mm; 
 <path d="M640 27V14H336V27" fill="none" stroke="#1a1a1a" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#ah)"/>
 <text x="488" y="10" text-anchor="middle" font-size="9.5" fill="#444">decisões de pessoas e da IA viram eventos</text>
 <g fill="#fff" stroke="#7a7a7a" stroke-width="0.8">
-<rect x="0" y="28" width="96" height="18" rx="3"/><rect x="0" y="49" width="96" height="18" rx="3"/><rect x="0" y="70" width="96" height="18" rx="3"/><rect x="0" y="91" width="96" height="40" rx="3"/>
+<rect x="0" y="28" width="104" height="18" rx="3"/><rect x="0" y="49" width="104" height="18" rx="3"/><rect x="0" y="70" width="104" height="18" rx="3"/><rect x="0" y="91" width="104" height="41" rx="3"/>
 </g>
 <g text-anchor="middle" font-size="10">
-<text x="48" y="41">Formulário e LP</text><text x="48" y="62">QR e links curtos</text><text x="48" y="83">Hotmart</text>
-<g font-size="9.3"><text x="48" y="104">WhatsApp: Meta</text><text x="48" y="115">(oficial) ou WAHA</text><text x="48" y="126" fill="#444">demo: porta 3200</text></g>
+<text x="52" y="41">Formulário e LP</text><text x="52" y="62">QR e links curtos</text><text x="52" y="83">Hotmart</text>
+<g font-size="9"><text x="52" y="100.5">WhatsApp: API</text><text x="52" y="109.5">oficial da Meta</text><text x="52" y="120" fill="#444">demo: simulador,</text><text x="52" y="129" fill="#444">porta 3200</text></g>
 </g>
 <text x="116" y="10" font-size="9.5" fill="#444">núcleo (demo: porta 3000)</text>
 <g fill="none" stroke="#1a1a1a" stroke-width="0.9">
-<path d="M96 37H106M96 58H106M96 79H106M96 111H106M106 37V111"/>
-<path d="M106 80H115" marker-end="url(#ah)"/>
+<path d="M104 37H110M104 58H110M104 79H110M104 111H110M110 37V111"/>
+<path d="M110 80H115" marker-end="url(#ah)"/>
 <path d="M252 80H267" marker-end="url(#ah)"/>
 <path d="M404 80H419" marker-end="url(#ah)"/>
 <path d="M556 80H571" marker-end="url(#ah)"/>
@@ -222,25 +223,25 @@ figcaption { color: #555; font-size: 8pt; line-height: 1.35; margin-top: 0.6mm; 
 </g>
 </g>
 </svg>
-<figcaption>O log só recebe acréscimos; projeções são visões recalculadas dele; a resposta da IA entra como evento. Na demo, os três serviços rodam na máquina de quem avalia, como se fossem as máquinas da VPS, e a tela de Atendimento do núcleo faz o papel da caixa.</figcaption>
+<figcaption>O log só recebe acréscimos; a resposta da IA entra como evento. Na demo, um simulador local faz o papel do celular, e a tela de Atendimento do núcleo, o da caixa. O adaptador da API oficial tem testes de contrato, e o README detalha o protocolo simulado.</figcaption>
 </figure>
 
-<div class="cols c-1-1">
+<div class="cols c-4-3">
 <div>
 <table>
-<thead><tr><th>Informação</th><th style="width:38mm">Dono</th></tr></thead>
+<thead><tr><th>Informação</th><th style="width:48mm">Dono</th></tr></thead>
 <tbody>
 <tr><td>Venda, pagamento, turma, vaga e histórico de alunos</td><td>ERP (pacientes: P7)</td></tr>
 <tr><td>Pessoa, origem, oportunidade, consentimento e decisões</td><td>Núcleo próprio</td></tr>
 <tr><td>Conversa e fila de atendimento</td><td>Chatwoot (trocável)</td></tr>
-<tr><td>Provedor de WhatsApp</td><td>Meta (padrão) ou WAHA</td></tr>
+<tr><td>Provedor de WhatsApp</td><td>API oficial da Meta; WAHA só como alternativa não oficial</td></tr>
 <tr><td>Campanha e investimento</td><td>Plataformas de anúncio</td></tr>
-<tr><td>Automação de marketing na transição</td><td>RD (só fonte e meio, sem campanha)</td></tr>
+<tr><td>Automação na transição</td><td>RD Station (a origem completa fica no núcleo)</td></tr>
 </tbody>
 </table>
 </div>
 <div>
-<p>A mesma pessoa é reconhecida por telefone, e-mail, id do WhatsApp e ids do ERP. Aluna, paciente e lead são papéis da mesma ficha, cada um com a sua unidade. O casamento exige igualdade exata, nunca o nome: na dúvida ficam duas fichas e uma pessoa decide. Cada contato é um toque novo, e nada é sobrescrito. A chave (fonte e id externo) descarta repetição, que a Meta reenvia por até 7 dias (28/10/2026); o horário do evento define a ordem; o evento que falha vai para quarentena. As ferramentas gravam quem fez cada ação, por quê e com base em quê. É um monólito modular com um banco de dados, mantido por uma pessoa.</p>
+<p>A mesma pessoa é reconhecida por telefone, e-mail, id do WhatsApp e ids do ERP. Aluna, paciente e lead são papéis da mesma ficha, cada um com a sua unidade. O casamento exige igualdade exata, nunca o nome: na dúvida ficam duas fichas e uma pessoa decide. Cada contato é um toque novo, e nada é sobrescrito. A chave de cada evento descarta repetição, que a Meta reenvia por até 7 dias (28/10/2026); o horário do evento define a ordem; o evento que falha vai para quarentena, revisada todo dia pelo profissional dedicado e reprocessada com a mesma chave. Monólito modular, um banco, uma pessoa.</p>
 </div>
 </div>
 
@@ -255,10 +256,10 @@ figcaption { color: #555; font-size: 8pt; line-height: 1.35; margin-top: 0.6mm; 
 <tr><td class="k">Custo, hospedagem, saída</td><td>US$ 0 (Community); 2 vCPU e 4 GB, Postgres e Redis; saída por Postgres, API e CSV</td><td>Núcleo grátis; 2 GB, Postgres e Redis; saída por pg_dump, API e CSV</td><td>Só horas: 2 a 3 meses para a caixa de WhatsApp (estimativa minha); sem aprisionamento</td></tr>
 </tbody>
 </table>
-<p class="note">MIT: licença que permite usar, alterar e copiar o código (fork: cópia própria). Fora da comparação (28/10/2026): Frappe CRM, Odoo Community, Krayin, EspoCRM, SuiteCRM e Zammad, por limites no WhatsApp.</p>
+<p class="note">MIT: licença que permite usar, alterar e copiar o código. Licença zero não é custo zero: servidor e horas de manutenção a dimensionar. Fora da comparação, por limites no WhatsApp (28/10/2026): Frappe CRM, Odoo, Krayin, EspoCRM, SuiteCRM e Zammad.</p>
 <p>Recomendo um núcleo próprio (identidade, origem, oportunidades, regras e agentes) com o Chatwoot hospedado pela Clinic como caixa de atendimento trocável; o Twenty fica para depois. Só o Chatwoot atende o WhatsApp oficial hoje, e nenhum dos dois resolve identidade única nem origem só de acréscimo. A Clinic mantém o código, os dados num Postgres próprio, o servidor e um fork MIT do Chatwoot sem <code>enterprise/</code>.</p>
 
-<div class="answer"><strong>Resposta objetiva:</strong> o ERP é dono de venda, pagamento, turma e vaga; o núcleo, de pessoa, origem e oportunidade; o atendimento, da conversa. Construo o núcleo e adapto o Chatwoot, sem contratar um CRM pronto; a Clinic mantém código, dados e servidor.</div>
+<div class="answer"><strong>Resposta objetiva:</strong> o ERP é dono de venda, pagamento, turma e vaga; o núcleo, de pessoa, origem e oportunidade; o atendimento, da conversa. Construo o núcleo e adapto o Chatwoot, com o controle na Clinic.</div>
 </section>
 
 <!-- ===================== PÁGINA 5 ===================== -->
@@ -266,15 +267,15 @@ figcaption { color: #555; font-size: 8pt; line-height: 1.35; margin-top: 0.6mm; 
 <h2>5. IA no atendimento e caminho para o Grande Cérebro</h2>
 
 <p>Começo pela triagem (fase 1) de toda conversa do WhatsApp. A IA classifica, grava a origem declarada e encaminha à fila certa, com motivo e resumo; quem responde é sempre uma pessoa, e cada correção dela vira gabarito (resposta certa conhecida) para medir a IA. Compra de curso vai para vendas da unidade; paciente modelo, para a agenda; dúvida de aluno, para o suporte; reclamação, para atendimento humano com prioridade; dúvida clínica, para a equipe clínica, e a IA nunca responde; o resto, ou a incerteza, para a triagem humana.</p>
-<p>Na fase 2, a IA informa curso, preço e vagas e responde dúvidas frequentes, citando a fonte lida do sistema dono do dado; nos demais casos só acolhe e encaminha. A demo já mostra uma prévia da fase 2: o agente responde vagas e preço com o ERP como fonte (e a hora), pergunta a origem quando não a conhece e passa dúvida clínica e reclamação a pessoas. Só entra depois de um modo sombra (responde sem enviar, para comparar com as pessoas) atingir a meta combinada com o fundador, por exemplo 95% de acerto em 200 conversas avaliadas. Na fase 3, prepara pré-matrícula e agendamento, e uma pessoa aprova; só vira automático o que tiver risco baixo e histórico medido.</p>
+<p>Na fase 2, a IA informa curso, preço e vagas e responde dúvidas frequentes, citando a fonte lida do sistema dono do dado; nos demais casos só acolhe e encaminha. A demo já mostra a fase 2: o agente responde vagas e preço com o ERP como fonte (e a hora), pergunta a origem se não a conhece e passa dúvida clínica e reclamação a pessoas. Só entra após um modo sombra (responde sem enviar, para comparar com as pessoas) atingir a meta combinada com o fundador, por exemplo 95% de acerto em 200 conversas avaliadas. Na fase 3, prepara pré-matrícula e agendamento, e uma pessoa aprova; só vira automático o de risco baixo e histórico medido.</p>
 <table>
 <thead><tr><th style="width:34mm">Pergunta</th><th>Como o desenho responde</th></tr></thead>
 <tbody>
 <tr><td>Informação confiável</td><td>Ferramentas leem preço, vagas, pagamentos e agenda no sistema dono do dado (o ERP) e devolvem data e hora. Se o sistema não responde, o agente avisa e passa para uma pessoa. O modelo nunca calcula número oficial.</td></tr>
 <tr><td>Automático, aprovação, humano</td><td>Automático: classificar, encaminhar, gravar origem declarada, abrir oportunidade com confiança acima de 0,85. Aprovação: unir fichas, liberar ponto, pré-matrícula. Humano: confiança abaixo de 0,85, reclamação, dúvida clínica, fora do escopo, ERP fora do ar.</td></tr>
-<tr><td>Duplicidade, exposição de dados</td><td>Cada ação leva a chave do evento que a disparou, e o banco impede duas oportunidades abertas iguais. O modelo recebe só texto e contexto mínimo, sem telefone nem e-mail, e o agente só tem ferramentas ligadas à pessoa da conversa; nem uma mensagem maliciosa leva aos dados de outra.</td></tr>
+<tr><td>Duplicidade, exposição de dados</td><td>Cada ação leva a chave do evento que a disparou, e o banco impede duas oportunidades abertas iguais. O modelo recebe só texto e contexto mínimo, sem telefone nem e-mail, e as ferramentas do agente só alcançam a pessoa da conversa.</td></tr>
 <tr><td>Avaliação</td><td>Tudo sai do log: conversas resolvidas sem reabertura em 7 dias, acerto contra o gabarito humano, custo por conversa resolvida e vendas confirmadas pelo ERP.</td></tr>
-<tr><td>Provedor: chat, API, integração</td><td>A camada que chama o modelo é fina; prompts, ferramentas e histórico ficam com a Clinic, e o modelo novo roda em modo sombra antes de entrar. Chat (ChatGPT, Claude) é produto para pessoas, e os termos de consumidor da Anthropic vedam automatizá-lo (os da OpenAI estão por reconferir). A API serve a aplicações e não treina com seus dados por padrão. O MCP, padrão aberto para ligar ferramentas a modelos de IA, expõe as mesmas a qualquer modelo.</td></tr>
+<tr><td>Provedor: chat, API, integração</td><td>A camada do modelo é fina; prompts, ferramentas e histórico ficam com a Clinic. Para escolher ou trocar de modelo, o mesmo conjunto de conversas compara acerto, exposição de dados, latência e custo por resolução; o novo roda em modo sombra, e a troca pede aprovação humana. Chat (ChatGPT, Claude) é produto para pessoas, e os termos de consumidor da Anthropic vedam automatizá-lo (os da OpenAI estão por reconferir). A API serve a aplicações e não treina com seus dados por padrão. O MCP (padrão aberto) expõe as ferramentas a qualquer modelo.</td></tr>
 </tbody>
 </table>
 <p class="note">WhatsApp (28 e 29/10/2026): na API oficial da Meta valem os Termos §4.7 (23/09/2026), que permitem automação de atendimento com passagem para humano e restringem “provedores de IA”; leio que um bot da Clinic fica fora, e o jurídico confirma. O WAHA (não oficial, automatiza o WhatsApp Web) não tem garantia de política e arrisca o bloqueio do número.</p>
@@ -285,13 +286,13 @@ figcaption { color: #555; font-size: 8pt; line-height: 1.35; margin-top: 0.6mm; 
 <li>Qualidade primeiro: cobertura de origem e alertas de Campinas. Se o rastreamento falhou, a resposta começa por aí (como a LP de Campinas sem UTMs na demo).</li>
 <li>Números oficiais do ERP: vendas, cancelamentos, turmas e vagas. A turma pode ter lotado.</li>
 <li>Funil do núcleo por unidade e canal, com regra de atribuição, janela e mistura de níveis de origem à vista.</li>
-<li>Investimento por campanha, lido das plataformas de anúncio pelo agente de tráfego.</li>
+<li>Investimento por campanha: a tela Campanhas da demo já relaciona campanha, investimento, leads, vendas confirmadas e vagas (valores fictícios); depois, o agente de tráfego lê as plataformas.</li>
 <li>Hipóteses em ordem, cada uma com evidências. Ações, como mudar verba, só com aprovação humana.</li>
 </ol>
 <p>Decisões de hoje: o log reprocessável, a origem com nível de prova, o id da oportunidade na matrícula do ERP e a unidade no código da campanha; as análises rodam em Python, num processo separado que só lê uma cópia. Limites: a atribuição é uma conclusão por regra, com nome, versão e janela; semanas com poucas vendas não sustentam conclusões fortes; vendas, saldo, vagas, comissões e DRE ficam nos sistemas responsáveis.</p>
 <div class="answer"><strong>Resposta objetiva:</strong> a consulta passa pela qualidade da origem, pelos números oficiais do ERP, pelo funil e pelo investimento, e só então ordena hipóteses, com ações só sob aprovação humana.</div>
 
-<p class="src">Fontes (consulta em 28/10/2026, salvo indicação; links em docs/processo/pesquisa/): Meta (developers.facebook.com, facebook.com/legal), Google e WAHA (29/10), Hotmart, RD Station, planalto.gov.br, repositórios do Chatwoot e do Twenty, modelcontextprotocol.io, Anthropic, OpenAI.</p>
+<p class="src">Fontes (consulta em 28/10/2026, salvo indicação; links em docs/processo/pesquisa/): Meta, Google e WAHA (29/10), Hotmart, RD Station, planalto.gov.br, repositórios do Chatwoot e do Twenty, modelcontextprotocol.io, Anthropic, OpenAI.</p>
 </section>
 
 </body>

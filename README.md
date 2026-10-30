@@ -57,7 +57,7 @@ Na demo, `WHATSAPP_PROVIDER=waha` e `WAHA_URL` aponta para o simulador local (:3
 
 ## Resultado esperado
 
-Saída real de `npm run verify`, colada depois de rodar neste repositório com os três serviços integrados:
+Saída real de `npm run verify`, colada depois de rodar neste repositório. O `verify` roda o núcleo sozinho, sem rede, com o catálogo local do ERP; o circuito completo com os três serviços é a demo ao vivo (`npm run demo`):
 
 ```text
 1. Origem preservada até a venda
