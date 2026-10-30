@@ -110,6 +110,20 @@ export function createErpApp({ notifyCore, db = new Database(':memory:') }: ErpD
   app.get('/api/catalog', (c) => c.json(catalog()));
   app.get('/api/orders', (c) => c.json((db.prepare('SELECT * FROM orders ORDER BY id DESC').all() as OrderRow[]).map(view)));
 
+  app.post('/api/reset', async (c) => {
+    if (!safeEqual(c.req.header('x-erp-token') ?? '', token)) return c.json({ error: 'token inválido' }, 401);
+    // Finish active notices before reusing order ids, including their finally callbacks.
+    await Promise.all([...notifications.values()]);
+    db.transaction(() => {
+      db.prepare('DELETE FROM orders').run();
+      db.prepare("DELETE FROM sqlite_sequence WHERE name = 'orders'").run();
+      db.prepare('DELETE FROM seats').run();
+      for (const offer of CATALOG) seed.run(offer.product, offer.unit, offer.seatsLeft);
+    })();
+    console.log('erp: estado da demo reiniciado');
+    return c.json({ ok: true });
+  });
+
   app.post('/api/orders', async (c) => {
     if (!safeEqual(c.req.header('x-erp-token') ?? '', token)) return c.json({ error: 'token inválido' }, 401);
     const parsed = orderSchema.safeParse(await c.req.json().catch(() => null));

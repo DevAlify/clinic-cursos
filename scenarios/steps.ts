@@ -52,6 +52,13 @@ function anaOpportunityId(db: Db): string | null {
   return row?.id ?? null;
 }
 
+function anaSaleId(db: Db): string {
+  const opportunityId = anaOpportunityId(db);
+  const row = db.prepare('SELECT erp_order_id FROM opportunities WHERE id = ?').get(opportunityId) as { erp_order_id: string | null } | undefined;
+  const orderNumber = /^ERP-ORD-(\d+)$/.exec(row?.erp_order_id ?? '');
+  return `ERP-SALE-${orderNumber ? 1000 + Number(orderNumber[1]) : 1001}`;
+}
+
 export const steps: Step[] = [
   { id: 'carla-qr-scan', who: 'Carla', label: 'Lê o QR do banner da recepção do Rio', build: () => ({ method: 'GET', path: `/r/${QR_CODE}`, headers: { 'x-occurred-at': brt('2026-10-10T09:58') } }) },
   { id: 'carla-whatsapp-code', who: 'Carla', label: 'Manda a mensagem pronta, com o código', build: () => whatsapp(carla1) },
@@ -73,5 +80,5 @@ export const steps: Step[] = [
   { id: 'atendente-responde-ana', who: 'Atendente', label: 'Responde a Ana pelo WhatsApp', build: ({ db }) => attendant('reply_to_conversation', '16:42', { personId: anaPersonId(db), businessNumber: NUMBERS.sp, text: 'Oi, Ana! Aqui é a Joana, da Clinic SP. Separei uma vaga para você na turma de 14/11. Posso fazer sua pré-matrícula?' }) },
   { id: 'atendente-proposta-ana', who: 'Atendente', label: 'Avança a oportunidade da Ana para proposta', build: ({ db }) => attendant('advance_opportunity', '16:45', { opportunityId: anaOpportunityId(db), stage: 'proposal', reason: 'proposta enviada no WhatsApp' }) },
   { id: 'atendente-pre-matricula-ana', who: 'Atendente', label: 'Registra a pré-matrícula: o pedido vai para o ERP', build: ({ db }) => attendant('request_enrollment', '16:50', { opportunityId: anaOpportunityId(db) }) },
-  { id: 'ana-erp-sale', who: 'ERP', label: 'O ERP confirma o pagamento do pedido da Ana, com o id da oportunidade', build: ({ db }) => erp({ type: 'sale_confirmed', saleId: 'ERP-SALE-1001', confirmedAt: brt('2026-10-29T17:00'), opportunityId: anaOpportunityId(db), name: PEOPLE.ana.name, phone: PEOPLE.ana.phone, email: PEOPLE.ana.email, product: 'hof', unit: 'sp' }) },
+  { id: 'ana-erp-sale', who: 'ERP', label: 'O ERP confirma o pagamento do pedido da Ana, com o id da oportunidade', build: ({ db }) => erp({ type: 'sale_confirmed', saleId: anaSaleId(db), confirmedAt: brt('2026-10-29T17:00'), opportunityId: anaOpportunityId(db), name: PEOPLE.ana.name, phone: PEOPLE.ana.phone, email: PEOPLE.ana.email, product: 'hof', unit: 'sp' }) },
 ];

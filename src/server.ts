@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { CAMPAIGN_SPEND } from '../scenarios/fixtures.ts';
 import { seed } from '../scenarios/seed.ts';
 import { steps } from '../scenarios/steps.ts';
-import { DEFAULT_RULES, SECRETS } from './config.ts';
+import { DEFAULT_RULES, ERP_URL, SECRETS, WAHA_URL } from './config.ts';
 import type { Db } from './core/db.ts';
 import type { ApplyResult } from './core/apply.ts';
 import { ingest } from './core/ingest.ts';
@@ -124,16 +124,37 @@ export function createApp(opts: AppOptions) {
     const req = step.build({ db });
     const res = await app.request(req.path, { method: req.method, headers: req.headers, body: req.body });
     ran.add(step.id);
-    return c.json({ ok: res.status < 400, status: res.status });
+    const result = await res.json().catch(() => null) as { duplicate?: boolean; duplicates?: number } | null;
+    const duplicate = result?.duplicate === true || (result?.duplicates ?? 0) > 0;
+    return c.json({ ok: res.status < 400, status: res.status, ...(duplicate ? { duplicate: true } : {}) });
   });
 
-  app.post('/api/reset', (c) => {
+  app.post('/api/reset', async (c) => {
+    const failedServices: string[] = [];
+    // Reset is idempotent. One attempt per service, bounded to five seconds; the next click may retry.
+    // Drain downstream work before reseeding the core so old sale notifications cannot reach the new seed.
+    const services: { name: string; url: string; headers: Record<string, string> }[] = [
+      { name: 'erp', url: ERP_URL, headers: { 'x-erp-token': SECRETS.erpToken } },
+      { name: 'waha', url: WAHA_URL, headers: { 'X-Api-Key': SECRETS.wahaApiKey } },
+    ];
+    for (const service of services) {
+      if (!service.url) continue;
+      try {
+        const res = await io(`${service.url.replace(/\/$/, '')}/api/reset`, {
+          method: 'POST', headers: service.headers, signal: AbortSignal.timeout(5000),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      } catch {
+        failedServices.push(service.name);
+        console.error(`core: reset de ${service.name} falhou; confira o serviço e tente recomeçar novamente`);
+      }
+    }
     db.close();
     db = opts.openFresh();
     rules = initialRules();
     seed(db, rules);
     ran.clear();
-    return c.json({ ok: true });
+    return c.json({ ok: true, ...(failedServices.length ? { failedServices } : {}) });
   });
 
   app.post('/api/replay', async (c) => {

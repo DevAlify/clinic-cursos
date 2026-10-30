@@ -55,6 +55,13 @@ export function createWahaSimApp({ deliverWebhook, scanQr }: WahaSimDeps) {
 
   app.get('/', (c) => c.html(page));
 
+  app.post('/api/reset', (c) => {
+    if (!safeEqual(c.req.header('x-api-key') ?? '', apiKey)) return c.json({ error: 'X-Api-Key inválida' }, 401);
+    phones.clear();
+    console.log('waha: conversas da demo reiniciadas');
+    return c.json({ ok: true });
+  });
+
   app.get('/api/personas', (c) => c.json(PERSONAS));
 
   // Same shape as WAHA's GET /api/sessions (the part the core and the page use).
