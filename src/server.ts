@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
+import { HTTPException } from 'hono/http-exception';
 import { z } from 'zod';
 import { CAMPAIGN_SPEND } from '../scenarios/fixtures.ts';
 import { seed } from '../scenarios/seed.ts';
@@ -9,6 +10,7 @@ import { DEFAULT_RULES, SECRETS } from './config.ts';
 import type { Db } from './core/db.ts';
 import type { ApplyResult } from './core/apply.ts';
 import { ingest } from './core/ingest.ts';
+import { InvalidEventError } from './core/log.ts';
 import { getLink } from './core/queries.ts';
 import { previewRules, rebuild } from './core/replay.ts';
 import { getCampaigns, getConversationDetail, getPipeline, getState, listConversations } from './core/state.ts';
@@ -43,6 +45,14 @@ export function createApp(opts: AppOptions) {
     await next();
   };
   for (const path of ['/r/*', '/tools/*', '/api/links']) app.use(path, checkOccurredAt);
+
+  // An event the log refuses (time or payload) is the caller's input: 400, not 500. Anything else stays a 500.
+  app.onError((err, c) => {
+    if (err instanceof HTTPException) return err.getResponse();
+    if (err instanceof InvalidEventError) return c.json({ error: err.message.slice(0, 200) }, 400);
+    console.error(err);
+    return c.json({ error: 'erro interno' }, 500);
+  });
 
   app.use('/webhooks/*', bodyLimit({ maxSize: 100 * 1024, onError: (c) => c.json({ error: 'corpo grande demais' }, 413) }));
 
@@ -127,7 +137,7 @@ export function createApp(opts: AppOptions) {
   });
 
   app.post('/api/replay', async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as { windowDays?: unknown; apply?: unknown };
+    const body = ((await c.req.json().catch(() => ({}))) ?? {}) as { windowDays?: unknown; apply?: unknown };
     const windowDays = Number(body.windowDays);
     if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) return c.json({ error: 'janela inválida' }, 400);
     const next = { ...rules, attributionWindowDays: windowDays };

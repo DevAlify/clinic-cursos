@@ -3,15 +3,18 @@ import type { Db } from '../core/db.ts';
 import { storePii, toIdentifier } from '../core/pii.ts';
 import type { EventInput, Identifier } from '../core/types.ts';
 
+// Every text is bounded at the door: nothing unbounded reaches the normalizers, the vault or the log.
+const text = (max = 200) => z.string().max(max).optional();
+
 export const formBodySchema = z.object({
-  submissionId: z.string().min(8),
-  entryPoint: z.string(),
-  submittedAt: z.iso.datetime({ offset: true }),
-  name: z.string().optional(),
-  phone: z.string().optional(),
-  email: z.string().optional(),
-  utm: z.object({ source: z.string().optional(), medium: z.string().optional(), campaign: z.string().optional(), content: z.string().optional(), term: z.string().optional() }).default({}),
-  clickIds: z.object({ gclid: z.string().optional(), fbclid: z.string().optional() }).default({}),
+  submissionId: z.string().min(8).max(200),
+  entryPoint: z.string().max(200),
+  submittedAt: z.iso.datetime({ offset: true }).max(64),
+  name: text(),
+  phone: text(40),
+  email: text(254),
+  utm: z.object({ source: text(), medium: text(), campaign: text(), content: text(), term: text() }).default({}),
+  clickIds: z.object({ gclid: text(), fbclid: text() }).default({}),
   test: z.boolean().default(false),
 });
 export type FormBody = z.infer<typeof formBodySchema>;

@@ -106,3 +106,52 @@ test('the simulator API lists steps, runs one and resets', async () => {
   await post(app, '/api/reset', '{}');
   assert.equal(((await (await app.request('/api/steps')).json()) as { ran: boolean }[])[0].ran, false);
 });
+
+test('a submission time with a long fraction is accepted; one that cannot be stored is a 400, never a 500', async () => {
+  const { app, getDb } = fresh();
+  const form = (submissionId: string, submittedAt: string) => JSON.stringify({ submissionId, entryPoint: 'cps-lp-hof-01', submittedAt, phone: '(19) 91111-0001' });
+  assert.equal((await post(app, '/webhooks/forms', form('form-frac-0001', '2026-10-29T10:00:00.123456Z'))).status, 200);
+  const before = (getDb().prepare('SELECT COUNT(*) AS n FROM events').get() as { n: number }).n;
+  const tooLong = '2026-10-29T10:00:00.123456789012Z';
+  assert.equal((await post(app, '/webhooks/forms', form('form-frac-0002', tooLong))).status, 400);
+  assert.equal((await app.request('/r/K7P2', { headers: { 'x-occurred-at': tooLong } })).status, 400);
+  assert.equal((getDb().prepare('SELECT COUNT(*) AS n FROM events').get() as { n: number }).n, before);
+});
+
+test('oversized fields are refused at the door, fast, and nothing is stored', async () => {
+  const { app, getDb } = fresh();
+  const count = () => (getDb().prepare('SELECT (SELECT COUNT(*) FROM events) + (SELECT COUNT(*) FROM pii) AS n').get() as { n: number }).n;
+  const before = count();
+  const erp = { 'x-erp-token': SECRETS.erpToken };
+  const form = (extra: object) => JSON.stringify({ submissionId: 'form-big-0001', entryPoint: 'cps-lp-hof-01', submittedAt: '2026-10-29T10:00:00Z', ...extra });
+  const huge = 'a'.repeat(40_000);
+  const started = performance.now();
+  assert.equal((await post(app, '/webhooks/forms', form({ email: `${huge}@x.com` }))).status, 400);
+  assert.equal((await post(app, '/webhooks/forms', form({ phone: '9'.repeat(5_000) }))).status, 400);
+  assert.equal((await post(app, '/webhooks/forms', form({ phone: '(19) 91111-0001', name: 'n'.repeat(201) }))).status, 400);
+  assert.equal((await post(app, '/webhooks/forms', form({ phone: '(19) 91111-0001', utm: { campaign: 'c'.repeat(201) } }))).status, 400);
+  assert.equal((await post(app, '/webhooks/forms', form({ phone: '(19) 91111-0001', entryPoint: 'e'.repeat(201) }))).status, 400);
+  assert.equal((await post(app, '/webhooks/erp', JSON.stringify({ type: 'sale_confirmed', saleId: 'S'.repeat(201), confirmedAt: '2026-10-29T16:30:00Z', opportunityId: null, phone: '(19) 91111-0002', product: 'hof', unit: 'sp' }), erp)).status, 400);
+  assert.equal((await post(app, '/webhooks/erp', JSON.stringify({ type: 'person_imported', batch: 'b1', erpId: 'E'.repeat(201), role: 'patient', unit: 'cps', importedAt: '2026-09-15T10:00:00Z', phone: '(19) 91111-0003' }), erp)).status, 400);
+  assert.ok(performance.now() - started < 1_000, 'oversized input must be refused quickly');
+  assert.equal(count(), before);
+  const link = (extra: object) => JSON.stringify({ entryPoint: 'sp-banner-recepcao-01', label: 'banner da recepção de SP', owner: 'recepcao-sp', channel: 'qr', campaign: 'sp_hof_captacao_202610', unit: 'sp', product: 'hof', linkType: 'qr', ...extra });
+  assert.equal((await post(app, '/api/links', link({ label: 'l'.repeat(201) }))).status, 400);
+  assert.equal((await post(app, '/api/links', link({ entryPoint: `sp-${'a'.repeat(40_000)}-01` }))).status, 400);
+});
+
+test('the link destination only accepts http and https', async () => {
+  const { app, getDb } = fresh();
+  const link = (destination: string) => JSON.stringify({ entryPoint: 'sp-lp-hof-09', label: 'página de harmonização', owner: 'marketing', channel: 'google_ads', campaign: 'sp_hof_captacao_202610', unit: 'sp', product: 'hof', linkType: 'url', destination });
+  const before = (getDb().prepare('SELECT COUNT(*) AS n FROM events').get() as { n: number }).n;
+  for (const bad of ['javascript:alert(1)', 'data:text/html,x', 'ftp://example.com/a']) assert.equal((await post(app, '/api/links', link(bad))).status, 400, bad);
+  assert.equal((getDb().prepare('SELECT COUNT(*) AS n FROM events').get() as { n: number }).n, before);
+  assert.equal((await post(app, '/api/links', link('https://clinic.example/harmonizacao'))).status, 200);
+});
+
+test('replay with a null or non-object body is a 400, never a 500', async () => {
+  const { app } = fresh();
+  for (const body of ['null', '5', '"x"', '[]']) assert.equal((await post(app, '/api/replay', body)).status, 400, body);
+  assert.equal((await post(app, '/api/replay', '{not json')).status, 400);
+  assert.equal((await post(app, '/api/replay', '{"windowDays":14}')).status, 200);
+});

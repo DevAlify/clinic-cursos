@@ -23,4 +23,5 @@ async function notifyCore(sale: SaleConfirmed): Promise<void> {
 }
 
 const app = createErpApp({ notifyCore, db: new Database(DB_PATH) });
-serve({ fetch: app.fetch, port }, (info) => console.log(`ERP simulado em http://localhost:${info.port}`));
+// Localhost by default: the demo has no auth on /api/reset and friends. Containers set HOST=0.0.0.0 (compose publishes on 127.0.0.1).
+serve({ fetch: app.fetch, port, hostname: process.env.HOST ?? '127.0.0.1' }, (info) => console.log(`ERP simulado em http://localhost:${info.port}`));

@@ -4,12 +4,14 @@ import { UNITS } from '../core/events.ts';
 import { storePii, toIdentifier } from '../core/pii.ts';
 import type { AnyEventInput, Identifier } from '../core/types.ts';
 
-const contact = { name: z.string().optional(), phone: z.string().optional(), email: z.string().optional() };
-const isoTime = z.iso.datetime({ offset: true });
+// Every text is bounded at the door: nothing unbounded reaches the normalizers, the vault or the log.
+const id = z.string().max(200);
+const contact = { name: z.string().max(200).optional(), phone: z.string().max(40).optional(), email: z.string().max(254).optional() };
+const isoTime = z.iso.datetime({ offset: true }).max(64);
 
 export const erpBodySchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('sale_confirmed'), saleId: z.string(), confirmedAt: isoTime, opportunityId: z.string().nullable(), product: z.string(), unit: z.enum(UNITS), ...contact }),
-  z.object({ type: z.literal('person_imported'), batch: z.string(), erpId: z.string(), role: z.enum(['patient', 'student']), unit: z.enum(UNITS), importedAt: isoTime, ...contact }),
+  z.object({ type: z.literal('sale_confirmed'), saleId: id, confirmedAt: isoTime, opportunityId: id.nullable(), product: id, unit: z.enum(UNITS), ...contact }),
+  z.object({ type: z.literal('person_imported'), batch: id, erpId: id, role: z.enum(['patient', 'student']), unit: z.enum(UNITS), importedAt: isoTime, ...contact }),
 ]);
 export type ErpBody = z.infer<typeof erpBodySchema>;
 

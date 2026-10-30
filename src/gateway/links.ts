@@ -9,15 +9,16 @@ import { getEntryPoint, getLink } from '../core/queries.ts';
 import type { Rules } from '../core/types.ts';
 
 export const linkRequestSchema = z.object({
-  entryPoint: z.string().refine(isValidEntryPoint, { message: 'ponto de entrada fora do padrão unidade-tipo-local-nn' }),
-  label: z.string().min(3),
-  owner: z.string().min(2),
-  channel: z.string().min(2),
-  campaign: z.string().refine(isValidCampaign, { message: 'campanha fora do padrão unidade_produto_objetivo_aaaamm' }),
+  entryPoint: z.string().max(200).refine(isValidEntryPoint, { message: 'ponto de entrada fora do padrão unidade-tipo-local-nn' }),
+  label: z.string().min(3).max(200),
+  owner: z.string().min(2).max(200),
+  channel: z.string().min(2).max(200),
+  campaign: z.string().max(200).refine(isValidCampaign, { message: 'campanha fora do padrão unidade_produto_objetivo_aaaamm' }),
   unit: z.enum(UNITS),
-  product: z.string().min(2),
+  product: z.string().min(2).max(200),
   linkType: z.enum(['url', 'whatsapp', 'qr', 'hotmart']),
-  destination: z.url().optional(),
+  // Only web pages: a javascript: or data: destination would turn the QR redirector into an attack vector.
+  destination: z.url({ protocol: /^https?$/ }).max(2048).optional(),
 });
 export type LinkRequest = z.infer<typeof linkRequestSchema>;
 

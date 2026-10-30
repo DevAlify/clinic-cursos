@@ -20,4 +20,5 @@ async function scanQr(code: string): Promise<string | null> {
 }
 
 const app = createWahaSimApp({ deliverWebhook, scanQr });
-serve({ fetch: app.fetch, port }, (info) => console.log(`Simulador do WAHA em http://localhost:${info.port}`));
+// Localhost by default: the demo has no auth on /api/reset and friends. Containers set HOST=0.0.0.0 (compose publishes on 127.0.0.1).
+serve({ fetch: app.fetch, port, hostname: process.env.HOST ?? '127.0.0.1' }, (info) => console.log(`Simulador do WAHA em http://localhost:${info.port}`));

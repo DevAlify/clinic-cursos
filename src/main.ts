@@ -16,4 +16,5 @@ function openFresh() {
 
 const { app } = createApp({ openFresh });
 app.use('/*', serveStatic({ root: './web/dist' }));
-serve({ fetch: app.fetch, port: PORT }, (info) => console.log(`Simulador em http://localhost:${info.port}`));
+// Localhost by default: the demo has no auth on /api/reset and friends. Containers set HOST=0.0.0.0 (compose publishes on 127.0.0.1).
+serve({ fetch: app.fetch, port: PORT, hostname: process.env.HOST ?? '127.0.0.1' }, (info) => console.log(`Simulador em http://localhost:${info.port}`));

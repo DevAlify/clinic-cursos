@@ -3,5 +3,6 @@ web/node_modules
 web/dist
 data
 *.db
+Desafio_Product_Builder_Clinic_Cursos.pdf
 .git
 .env
