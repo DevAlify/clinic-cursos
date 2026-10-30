@@ -1,0 +1,766 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arquitetura do sistema central</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=block" rel="stylesheet">
+<style>
+/* Companion to the 5-page document: same face and grey palette, light theme by choice, A4 print first, readable on screen. */
+:root {
+  --ink: #1a1a1a; --muted: #555; --line: #c8c8c8; --head: #efefec; --soft: #f7f7f5; --code: #f1f1ee;
+  --accent: #0e5a4e; --paper: #ffffff;
+  color-scheme: light;
+}
+@page { size: A4; margin: 14mm 15mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: #f2f2ef; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 9.5pt/1.42 "Inter", system-ui, "Segoe UI", sans-serif; }
+.doc { max-width: 210mm; margin: 0 auto; padding: 14mm 15mm; }
+@media screen { body { font-size: 15px; } .doc { box-shadow: 0 0 0 1px #e2e2de; } }
+@media screen and (max-width: 720px) { .doc { padding: 16px; } }
+@media print { html { background: none; } .doc { max-width: none; padding: 0; } }
+h1 { font-size: 16pt; line-height: 1.2; margin: 0 0 3mm; text-wrap: balance; }
+h2 { font-size: 12pt; margin: 6mm 0 2mm; padding-top: 1mm; border-top: 1.2pt solid var(--ink); break-after: avoid; text-wrap: balance; }
+h3 { font-size: 10pt; margin: 3.5mm 0 1.2mm; break-after: avoid; }
+p { margin: 0 0 1.6mm; }
+ul, ol { margin: 0 0 1.6mm; padding-left: 4.8mm; }
+li { margin: 0 0 0.6mm; }
+.meta { color: var(--muted); font-size: 8.5pt; margin: 0 0 3mm; }
+.note { color: var(--muted); font-size: 8pt; line-height: 1.35; margin: 0 0 1.6mm; }
+.wrap { overflow-x: auto; margin: 1mm 0 2mm; }
+table { width: 100%; border-collapse: collapse; font-size: 8.4pt; }
+th, td { border: 0.5pt solid var(--line); padding: 1.2mm 1.6mm; vertical-align: top; text-align: left; }
+th { background: var(--head); font-weight: 600; }
+tr { break-inside: avoid; }
+td.n, th.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+code { font: 0.9em ui-monospace, "Cascadia Mono", Consolas, monospace; background: var(--code); padding: 0 0.7mm; border-radius: 0.8mm; }
+pre { font: 7.6pt/1.4 ui-monospace, "Cascadia Mono", Consolas, monospace; background: var(--code); padding: 2mm 2.4mm; border-radius: 1.2mm; margin: 1mm 0 2mm; white-space: pre-wrap; break-inside: avoid; }
+.answer { border-left: 2pt solid var(--ink); padding: 0.6mm 0 0.6mm 3mm; margin: 2.4mm 0 3mm; break-inside: avoid; }
+.cols { display: grid; gap: 5mm; align-items: start; }
+.c-1-1 { grid-template-columns: 1fr 1fr; }
+@media screen and (max-width: 720px) { .c-1-1 { grid-template-columns: 1fr; } }
+figure { margin: 1.5mm 0 2.5mm; break-inside: avoid; }
+figure svg { display: block; width: 100%; height: auto; color: var(--ink); }
+figcaption { color: var(--muted); font-size: 8pt; line-height: 1.35; margin-top: 1mm; }
+.stack { display: grid; gap: 1mm; margin: 1mm 0 2mm; break-inside: avoid; }
+.layer { display: grid; grid-template-columns: 34mm 1fr 48mm; border: 0.5pt solid var(--line); border-radius: 1.2mm; overflow: hidden; }
+.layer > div { padding: 1.4mm 2mm; font-size: 8.4pt; }
+.layer .name { background: var(--head); font-weight: 600; }
+.layer .tech { background: var(--soft); color: #333; }
+.layer.core .name { background: var(--ink); color: #fff; }
+@media screen and (max-width: 720px) { .layer { grid-template-columns: 1fr; } }
+.src { color: var(--muted); font-size: 7.6pt; line-height: 1.4; }
+.src li { margin-bottom: 0.8mm; }
+.pb { break-before: page; }
+.k { white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="doc">
+
+<h1>Clinic Cursos: arquitetura do sistema central em produção</h1>
+<p class="meta">Documento técnico complementar ao documento de 5 páginas · 30/10/2026 · para o fundador e a banca técnica · desenho proposto, sem acesso aos sistemas da Clinic. Versões e preços foram consultados nas fontes oficiais na data indicada na seção 16; o que depende das respostas às perguntas P1 a P8 do documento principal está marcado como premissa.</p>
+
+<h3>Resumo</h3>
+<ol>
+<li><b>O que é.</b> O sistema que liga rastreamento, CRM, atendimento no WhatsApp com IA e ERP, mantido por um profissional dedicado. A demo entregue no repositório é uma fatia funcional deste desenho: o mesmo núcleo, as mesmas regras e as mesmas ferramentas.</li>
+<li><b>Forma.</b> Um monólito modular em TypeScript sobre PostgreSQL. No centro, um log de eventos só de acréscimo; ao redor, módulos de identidade, origem, CRM, conversas e regras. O Chatwoot é a caixa de atendimento, trocável. O ERP continua dono de venda, pagamento, turma e vaga.</li>
+<li><b>Onde roda.</b> Na AWS em São Paulo, atrás da Cloudflare, sem nenhuma porta aberta para a internet. Começa em um servidor e passa a dois servidores e um PostgreSQL gerenciado quando as três unidades entram.</li>
+<li><b>Integrações.</b> API oficial do WhatsApp (Meta), ERP, Hotmart, RD Station durante a transição, Meta e Google para conversões e Claude API para a IA. Toda saída passa por uma caixa de saída com nova tentativa e chave contra repetição.</li>
+<li><b>Custo.</b> Infraestrutura de cerca de US$ 112 por mês no piloto e US$ 383 nas três unidades (US$ 494 com a réplica de análise), a preço de lista da AWS em São Paulo. Somam-se as mensagens do WhatsApp, cerca de R$ 1.870 por mês nas três unidades, e a IA, de US$ 10 a US$ 360 por mês conforme o modelo que passar no teste (seção 13). Nenhuma licença paga é obrigatória.</li>
+<li><b>Riscos maiores.</b> Dependência de uma pessoa, política do WhatsApp para IA e um ERP sem API. O desenho reduz os três: operação simples e documentada, IA que só ganha autonomia medida, e conciliação quando o ERP não avisa (seção 15).</li>
+</ol>
+
+<h3>A arquitetura em camadas</h3>
+<div class="stack" role="list" aria-label="Camadas do sistema, de cima para baixo">
+  <div class="layer" role="listitem"><div class="name">Canais</div><div>LP e formulários, links curtos e QR das unidades, WhatsApp, checkout da Hotmart, anúncios</div><div class="tech">site atual, Meta, Google, Hotmart</div></div>
+  <div class="layer" role="listitem"><div class="name">Borda</div><div>DNS, TLS, proteção contra ataques, login da equipe com SSO, túnel até os servidores</div><div class="tech">Cloudflare: DNS, proxy, WAF, Access, Tunnel</div></div>
+  <div class="layer" role="listitem"><div class="name">Porta de entrada</div><div>confere assinatura, valida o formato, grava antes de usar, descarta repetição</div><div class="tech">módulo gateway: Hono + Zod</div></div>
+  <div class="layer core" role="listitem"><div class="name">Núcleo de dados</div><div>log de eventos só de acréscimo, cofre de dados pessoais cifrado, projeções refeitas do log</div><div class="tech">PostgreSQL 18</div></div>
+  <div class="layer" role="listitem"><div class="name">Domínio</div><div>identidade, origem e atribuição, oportunidades, conversas, regras e monitor de cobertura</div><div class="tech">módulos TypeScript no Node.js 26 LTS</div></div>
+  <div class="layer" role="listitem"><div class="name">Ferramentas e IA</div><div>as mesmas ferramentas para pessoas e agentes, com papel, aprovação e chave contra repetição</div><div class="tech">registro de ferramentas, Claude API, servidor MCP</div></div>
+  <div class="layer" role="listitem"><div class="name">Integrações</div><div>envio confiável para ERP, Chatwoot, WhatsApp, Meta, Google e RD</div><div class="tech">caixa de saída + fila pg-boss no PostgreSQL</div></div>
+  <div class="layer" role="listitem"><div class="name">Experiência</div><div>painel (CRM, Campanhas, Bastidores) e caixa de atendimento das unidades</div><div class="tech">React + Vite; Chatwoot com app de painel</div></div>
+  <div class="layer" role="listitem"><div class="name">Dados e análise</div><div>Grande Cérebro: funil, atribuição com regra e versão, investimento, vagas</div><div class="tech">réplica de leitura, Metabase, Python</div></div>
+  <div class="layer" role="listitem"><div class="name">Plataforma</div><div>implantação, segredos, backup, observabilidade, pipeline</div><div class="tech">AWS São Paulo, Docker, Coolify, GitHub Actions, SOPS, pgBackRest, OpenTelemetry</div></div>
+</div>
+
+<div class="answer"><b>Resposta objetiva:</b> um núcleo próprio em TypeScript e PostgreSQL, com o log de eventos no centro, o Chatwoot como caixa de atendimento e o ERP como dono da venda, rodando em São Paulo atrás da Cloudflare e operável por uma pessoa.</div>
+
+<h2>1. Escopo, premissas e requisitos</h2>
+<h3>As frentes do desafio no sistema</h3>
+<div class="wrap"><table>
+<tr><th>Frente</th><th>Onde fica</th><th>Regra de dono</th></tr>
+<tr><td>ERP</td><td>integração de dois sentidos: pedido sai do núcleo, venda volta por webhook</td><td>o ERP é a fonte oficial de venda, pagamento, turma e vaga; o núcleo só reage e mostra</td></tr>
+<tr><td>Rastreamento</td><td>porta de entrada, gerador de links e QR, origem e atribuição, monitor de cobertura</td><td>o núcleo é dono da origem, com nível de prova em cada campo</td></tr>
+<tr><td>CRM próprio</td><td>identidade, oportunidades e painel; histórico do ERP exibido por consulta</td><td>o núcleo é dono da pessoa e da oportunidade; "ganha" só com o ERP</td></tr>
+<tr><td>Atendimento próprio</td><td>WhatsApp oficial, Chatwoot, agente de IA e passagem para pessoa</td><td>o Chatwoot é dono da conversa; o núcleo é dono do envio e do registro</td></tr>
+<tr><td>Agente de tráfego</td><td>leitura diária de investimento por campanha e tela Campanhas</td><td>as plataformas de anúncio são donas do investimento; mudar verba exige aprovação</td></tr>
+<tr><td>Grande Cérebro</td><td>réplica de leitura, painéis e agentes com ferramentas só de leitura</td><td>cálculo oficial (vendas, saldo, comissões, DRE) fica nos sistemas responsáveis</td></tr>
+</table></div>
+
+<h3>Premissas de dimensionamento</h3>
+<p>Hipóteses até a resposta de P5 (volume por unidade e canal). O desenho folga muito acima delas; o que dita a forma é a operação por uma pessoa, não a carga.</p>
+<div class="wrap"><table>
+<tr><th>Grandeza</th><th class="n">Premissa</th><th>Consequência no desenho</th></tr>
+<tr><td>Leads novos</td><td class="n">10 mil/mês</td><td>cerca de 15 por hora; picos de campanha de 10 vezes cabem num processo</td></tr>
+<tr><td>Mensagens de WhatsApp</td><td class="n">80 mil/mês</td><td>entrada e saída; a Meta reenvia por até 7 dias se o núcleo cair</td></tr>
+<tr><td>Eventos no log</td><td class="n">300 mil/mês</td><td>cerca de 7 GB por ano com índices; refazer as projeções leva minutos</td></tr>
+<tr><td>Conversas com IA</td><td class="n">6 mil/mês</td><td>custo de modelo estimado na seção 13</td></tr>
+<tr><td>Atendentes simultâneos</td><td class="n">até 30</td><td>um Chatwoot com caixas por unidade</td></tr>
+<tr><td>Equipe técnica</td><td class="n">1 pessoa</td><td>um repositório, uma linguagem, um banco, poucos fornecedores</td></tr>
+</table></div>
+
+<h3>Requisitos não funcionais</h3>
+<div class="wrap"><table>
+<tr><th>Requisito</th><th>Meta</th><th>Como o desenho atende</th></tr>
+<tr><td>Disponibilidade da entrada</td><td>99,5% ao mês</td><td>gravar e responder em seguida; reenvio da Meta (7 dias) e da Hotmart (5 vezes); formulário com caminho de volta ao RD</td></tr>
+<tr><td>Confirmação de webhook</td><td>p95 abaixo de 1 s</td><td>a porta de entrada só valida e grava; o resto vai para a fila</td></tr>
+<tr><td>Primeira resposta da IA</td><td>p95 abaixo de 20 s</td><td>fila dedicada, contexto curto em cache, ERP consultado com tempo limite</td></tr>
+<tr><td>Painel</td><td>p95 abaixo de 500 ms</td><td>projeções prontas no banco, sem cálculo pesado na tela</td></tr>
+<tr><td>Perda máxima de dados (RPO)</td><td>5 min no piloto; segundos na fase de 90 dias</td><td>WAL enviado sem parar ao S3; depois, banco gerenciado com réplica síncrona</td></tr>
+<tr><td>Tempo de recuperação (RTO)</td><td>4 h no piloto; 1 h na fase de 90 dias</td><td>restauração ensaiada todo mês; imagem e configuração versionadas</td></tr>
+<tr><td>LGPD</td><td>dado pessoal só no cofre; dado de saúde fora do marketing</td><td>cofre cifrado por pessoa; apagamento por destruição da chave (seção 9)</td></tr>
+<tr><td>Operação</td><td>uma pessoa mantém</td><td>deploy de um clique, rotina diária de 15 minutos, runbooks (seção 11)</td></tr>
+</table></div>
+
+<h3>Princípios</h3>
+<ol>
+<li><b>Gravar antes de usar.</b> Todo fato entra no log, só de acréscimo; pessoa, oportunidade e fila são projeções refeitas dele.</li>
+<li><b>Cada dado tem um dono.</b> O núcleo nunca recalcula número oficial do ERP.</li>
+<li><b>Origem com nível de prova.</b> Observada, declarada, inferida ou desconhecida; o que falta não é completado.</li>
+<li><b>Identidade só por igualdade exata.</b> Fundir fichas é decisão humana registrada e reversível.</li>
+<li><b>Mesmas ferramentas para pessoas e IA.</b> Papel, permissão, aprovação e chave contra repetição em cada chamada.</li>
+<li><b>Dado pessoal à parte.</b> Cifrado, de acesso restrito, apagável; o mínimo sai para fora.</li>
+<li><b>Peças trocáveis.</b> Chatwoot, provedor de IA e hospedagem saem sem reescrever o núcleo.</li>
+<li><b>Simples de operar.</b> Menos peças vence mais desempenho que ninguém pediu.</li>
+</ol>
+<div class="answer"><b>Resposta objetiva:</b> o volume esperado é pequeno para um banco e um processo; a forma do sistema é decidida pela confiabilidade da origem, pela LGPD e pela operação por uma pessoa.</div>
+
+<h2>2. Contexto, serviços e topologia</h2>
+<figure>
+<svg viewBox="0 0 1000 460" role="img" aria-label="A equipe e os leads chegam pela Cloudflare, que leva o tráfego por túnel ao servidor do núcleo e ao servidor de atendimento; o núcleo chama os serviços externos pela caixa de saída e recebe deles webhooks assinados; o banco envia o WAL sem parar para o S3 em São Paulo.">
+<defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+<g font-family="Inter, Segoe UI, sans-serif" font-size="12" fill="currentColor">
+<path d="M975 50 V20 H340 V78" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="5 4" marker-end="url(#a2)"/>
+<text x="655" y="14" text-anchor="middle" font-size="11.5">webhooks assinados (Meta, ERP, Hotmart) entram pela borda</text>
+<g stroke="currentColor" fill="none" stroke-width="1.2">
+<rect x="10" y="122" width="165" height="52" rx="6"/>
+<rect x="10" y="292" width="165" height="52" rx="6"/>
+<rect x="10" y="388" width="165" height="52" rx="6"/>
+</g>
+<text x="92" y="144" text-anchor="middle" font-weight="600">Lead e visitante</text>
+<text x="92" y="162" text-anchor="middle" font-size="11">LP, link curto, QR</text>
+<text x="92" y="314" text-anchor="middle" font-weight="600">Equipe da Clinic</text>
+<text x="92" y="332" text-anchor="middle" font-size="11">atendentes e gestores</text>
+<text x="92" y="410" text-anchor="middle" font-weight="600">Provedor de identidade</text>
+<text x="92" y="428" text-anchor="middle" font-size="11">Google ou Microsoft</text>
+<rect x="205" y="40" width="165" height="400" rx="10" fill="currentColor" fill-opacity=".05" stroke="currentColor" stroke-width="1.2"/>
+<text x="270" y="62" text-anchor="middle" font-weight="700">Cloudflare</text>
+<g stroke="currentColor" fill="#fff" stroke-width="1">
+<rect x="220" y="80" width="135" height="36" rx="5"/>
+<rect x="220" y="130" width="135" height="36" rx="5"/>
+<rect x="220" y="270" width="135" height="36" rx="5"/>
+<rect x="220" y="320" width="135" height="36" rx="5"/>
+</g>
+<text x="287" y="102" text-anchor="middle" font-size="11.5">hooks. (webhooks)</text>
+<text x="287" y="152" text-anchor="middle" font-size="11.5">go. (links e QR)</text>
+<text x="287" y="292" text-anchor="middle" font-size="11.5">app. (painel)</text>
+<text x="287" y="342" text-anchor="middle" font-size="11.5">atendimento.</text>
+<text x="287" y="384" text-anchor="middle" font-size="11">WAF · DDoS · TLS</text>
+<text x="287" y="401" text-anchor="middle" font-size="11">Access: SSO e MFA</text>
+<text x="287" y="418" text-anchor="middle" font-size="11">Tunnel: sem porta aberta</text>
+<g stroke="currentColor" stroke-width="1.2" fill="none" marker-end="url(#a2)">
+<path d="M175 148 H218"/>
+<path d="M175 312 H196 V288 H218"/>
+<path d="M175 324 H196 V338 H218"/>
+<path d="M175 414 H203"/>
+</g>
+<text x="189" y="406" text-anchor="middle" font-size="10.5">SSO</text>
+<rect x="400" y="40" width="360" height="222" rx="10" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="6 4"/>
+<text x="412" y="60" font-weight="700" font-size="11.5">Servidor do núcleo · São Paulo · Coolify</text>
+<g stroke="currentColor" fill="#fff" stroke-width="1.2">
+<rect x="415" y="76" width="160" height="102" rx="6"/>
+<rect x="590" y="76" width="160" height="102" rx="6"/>
+<rect x="415" y="194" width="335" height="30" rx="6" fill="#1a1a1a"/>
+<rect x="415" y="230" width="335" height="24" rx="5" fill="#f1f1ee"/>
+</g>
+<text x="495" y="98" text-anchor="middle" font-weight="600">core-api</text>
+<text x="495" y="118" text-anchor="middle" font-size="11">webhooks e formulários</text>
+<text x="495" y="134" text-anchor="middle" font-size="11">painel e API</text>
+<text x="495" y="150" text-anchor="middle" font-size="11">links curtos e QR</text>
+<text x="495" y="166" text-anchor="middle" font-size="11">servidor MCP</text>
+<text x="670" y="98" text-anchor="middle" font-weight="600">core-worker</text>
+<text x="670" y="118" text-anchor="middle" font-size="11">fila e caixa de saída</text>
+<text x="670" y="134" text-anchor="middle" font-size="11">agente de IA</text>
+<text x="670" y="150" text-anchor="middle" font-size="11">monitor e conciliações</text>
+<text x="670" y="166" text-anchor="middle" font-size="11">mesmo código</text>
+<text x="582" y="214" text-anchor="middle" font-size="11.5" font-weight="600" fill="#fff">PostgreSQL · log · cofre · projeções · fila</text>
+<text x="582" y="246" text-anchor="middle" font-size="10.5">cloudflared (túnel de saída) · OpenTelemetry Collector</text>
+<g stroke="currentColor" stroke-width="1.2" fill="none" marker-start="url(#a2)" marker-end="url(#a2)">
+<path d="M495 180 V192"/>
+<path d="M670 180 V192"/>
+<path d="M582 264 V288"/>
+</g>
+<text x="592" y="280" font-size="10.5">API e webhooks (rede interna)</text>
+<rect x="400" y="290" width="360" height="150" rx="10" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="6 4"/>
+<text x="412" y="310" font-weight="700" font-size="11.5">Servidor de atendimento · São Paulo</text>
+<g stroke="currentColor" fill="#fff" stroke-width="1.2">
+<rect x="415" y="324" width="160" height="66" rx="6"/>
+<rect x="590" y="324" width="160" height="66" rx="6"/>
+</g>
+<text x="495" y="345" text-anchor="middle" font-weight="600">Chatwoot</text>
+<text x="495" y="363" text-anchor="middle" font-size="11">web + Sidekiq</text>
+<text x="495" y="379" text-anchor="middle" font-size="11">canal API, app de painel</text>
+<text x="670" y="345" text-anchor="middle" font-weight="600">PostgreSQL + Redis</text>
+<text x="670" y="363" text-anchor="middle" font-size="11">dados e fila</text>
+<text x="670" y="379" text-anchor="middle" font-size="11">do Chatwoot</text>
+<text x="580" y="424" text-anchor="middle" font-size="11">nas fases de 2 semanas e 30 dias, a mesma máquina do núcleo</text>
+<g stroke="currentColor" stroke-width="1.2" fill="none" marker-end="url(#a2)">
+<path d="M355 98 H413"/>
+<path d="M355 148 H413"/>
+<path d="M355 288 H386 V170 H413"/>
+<path d="M355 338 H413"/>
+</g>
+<text x="900" y="40" text-anchor="middle" font-weight="700" font-size="11.5">Serviços externos</text>
+<g stroke="currentColor" fill="none" stroke-width="1.2">
+<rect x="812" y="50" width="176" height="46" rx="6"/>
+<rect x="812" y="104" width="176" height="46" rx="6"/>
+<rect x="812" y="158" width="176" height="46" rx="6"/>
+<rect x="812" y="212" width="176" height="46" rx="6"/>
+<rect x="812" y="266" width="176" height="46" rx="6"/>
+<rect x="812" y="320" width="176" height="46" rx="6"/>
+<rect x="812" y="394" width="176" height="46" rx="6"/>
+</g>
+<text x="900" y="70" text-anchor="middle" font-weight="600">Meta</text><text x="900" y="87" text-anchor="middle" font-size="11">WhatsApp Cloud API, CAPI</text>
+<text x="900" y="124" text-anchor="middle" font-weight="600">ERP</text><text x="900" y="141" text-anchor="middle" font-size="11">pedido, venda, vagas</text>
+<text x="900" y="178" text-anchor="middle" font-weight="600">Anthropic</text><text x="900" y="195" text-anchor="middle" font-size="11">Claude API</text>
+<text x="900" y="232" text-anchor="middle" font-weight="600">Google</text><text x="900" y="249" text-anchor="middle" font-size="11">Ads (Data Manager), GA4</text>
+<text x="900" y="286" text-anchor="middle" font-weight="600">Hotmart</text><text x="900" y="303" text-anchor="middle" font-size="11">vendas dos cursos online</text>
+<text x="900" y="340" text-anchor="middle" font-weight="600">RD Station</text><text x="900" y="357" text-anchor="middle" font-size="11">marketing na transição</text>
+<text x="900" y="414" text-anchor="middle" font-weight="600">S3 em São Paulo</text><text x="900" y="431" text-anchor="middle" font-size="11">WAL contínuo e anexos</text>
+<g stroke="currentColor" stroke-width="1.2" fill="none">
+<path d="M750 100 H800"/>
+<path d="M800 73 V343"/>
+</g>
+<g stroke="currentColor" stroke-width="1.2" fill="none" marker-end="url(#a2)">
+<path d="M800 73 H810"/><path d="M800 127 H810"/><path d="M800 181 H810"/><path d="M800 235 H810"/><path d="M800 343 H810"/>
+</g>
+<text x="775" y="94" text-anchor="middle" font-size="10.5">saída</text>
+<path d="M750 209 H786 V417 H810" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#a2)"/>
+</g>
+</svg>
+<figcaption>Visão de contexto e topologia. Nenhum servidor recebe conexão de fora: o cloudflared abre o túnel de dentro para fora. Webhooks entram pela borda com assinatura conferida no núcleo; tudo que sai passa pela caixa de saída do core-worker; o PostgreSQL manda o WAL sem parar para o S3 em São Paulo; o OpenTelemetry Collector envia a telemetria ao serviço de observabilidade (seção 11).</figcaption>
+</figure>
+
+<h3>Serviços e onde rodam</h3>
+<div class="wrap"><table>
+<tr><th>Serviço</th><th>Faz</th><th>Tecnologia</th><th>Escala inicial</th><th>Acesso</th></tr>
+<tr><td><code>core-api</code></td><td>recebe webhooks e formulários, serve o painel e a API, resolve links curtos e QR, expõe as ferramentas por MCP</td><td>Node.js 26 LTS, Hono, Zod</td><td>2 processos</td><td><code>hooks.</code>, <code>go.</code>, <code>app.</code></td></tr>
+<tr><td><code>core-worker</code></td><td>fila, caixa de saída, agente de IA, monitor de cobertura, conciliações</td><td>o mesmo código, outro processo; pg-boss 12</td><td>1 a 2 processos</td><td>sem porta pública</td></tr>
+<tr><td>painel</td><td>CRM, Campanhas, Bastidores e tela de atendimento de contingência</td><td>React 19, Vite, Tailwind, shadcn</td><td>arquivos estáticos</td><td><code>app.</code> com Access</td></tr>
+<tr><td>PostgreSQL do núcleo</td><td>log de eventos, cofre, projeções, fila, caixa de saída</td><td>PostgreSQL 18</td><td>1 instância; RDS na fase de 90 dias</td><td>só rede interna</td></tr>
+<tr><td>Chatwoot</td><td>caixa de atendimento das unidades, com o canal API ligado ao núcleo e a ficha da pessoa numa aba de app de painel</td><td>Chatwoot Community v4.19.1 (Rails, Sidekiq), fork MIT sem <code>enterprise/</code></td><td>1 web + 1 Sidekiq; mínimo de 4 vCPU e 4 GB</td><td><code>atendimento.</code> com Access</td></tr>
+<tr><td>PostgreSQL e Redis do Chatwoot</td><td>dados e fila do Chatwoot</td><td>PostgreSQL com pgvector; Redis 7 ou mais novo (exigências do Chatwoot)</td><td>1 + 1</td><td>só rede interna</td></tr>
+<tr><td><code>cloudflared</code></td><td>túnel de saída até a Cloudflare</td><td>Cloudflare Tunnel</td><td>2 réplicas</td><td>só saída</td></tr>
+<tr><td>OpenTelemetry Collector</td><td>junta logs, métricas e rastros e envia ao serviço de observabilidade</td><td>OpenTelemetry</td><td>1</td><td>só saída</td></tr>
+<tr><td>Metabase (fase de 90 dias)</td><td>painéis do Grande Cérebro sobre a réplica de leitura</td><td>Metabase OSS v0.64 (AGPL)</td><td>1</td><td><code>bi.</code> com Access</td></tr>
+</table></div>
+<div class="answer"><b>Resposta objetiva:</b> cinco peças próprias (api, worker, painel, banco e túnel) e uma adotada (Chatwoot). Nada fica exposto: a equipe entra com SSO pela Cloudflare, e os parceiros, por webhooks assinados.</div>
+
+<h2>3. O núcleo por dentro</h2>
+<figure>
+<svg viewBox="0 0 1000 395" role="img" aria-label="A porta de entrada grava no log de eventos e manda texto e contato ao cofre; o log alimenta as projeções lidas pelo painel e pelos módulos de domínio; ferramentas, usadas por pessoas e pelo agente de IA, gravam ações no log; eventos que pedem envio vão para a caixa de saída.">
+<defs><marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+<g font-family="Inter, Segoe UI, sans-serif" font-size="12" fill="currentColor">
+<g stroke="currentColor" fill="none" stroke-width="1.2">
+<rect x="20" y="30" width="215" height="92" rx="7"/>
+<rect x="275" y="30" width="215" height="92" rx="7" fill="#1a1a1a"/>
+<rect x="530" y="30" width="215" height="92" rx="7"/>
+<rect x="785" y="30" width="195" height="92" rx="7"/>
+</g>
+<text x="127" y="52" text-anchor="middle" font-weight="700">1. Porta de entrada</text>
+<text x="127" y="72" text-anchor="middle" font-size="11">Meta, Chatwoot, ERP, Hotmart,</text>
+<text x="127" y="88" text-anchor="middle" font-size="11">formulário, links e QR</text>
+<text x="127" y="106" text-anchor="middle" font-size="11">assinatura · Zod · repetição</text>
+<text x="382" y="52" text-anchor="middle" font-weight="700" fill="#fff">2. Log de eventos</text>
+<text x="382" y="72" text-anchor="middle" font-size="11" fill="#fff">só acréscimo, ordem pelo</text>
+<text x="382" y="88" text-anchor="middle" font-size="11" fill="#fff">horário do evento</text>
+<text x="382" y="106" text-anchor="middle" font-size="11" fill="#fff">UNIQUE(fonte, id externo)</text>
+<text x="637" y="52" text-anchor="middle" font-weight="700">3. Projeções</text>
+<text x="637" y="72" text-anchor="middle" font-size="11">pessoa, toques, oportunidades,</text>
+<text x="637" y="88" text-anchor="middle" font-size="11">conversas, filas, cobertura</text>
+<text x="637" y="106" text-anchor="middle" font-size="11">refeitas do log a qualquer hora</text>
+<text x="882" y="52" text-anchor="middle" font-weight="700">Painel e API</text>
+<text x="882" y="72" text-anchor="middle" font-size="11">CRM, Campanhas,</text>
+<text x="882" y="88" text-anchor="middle" font-size="11">Bastidores, contingência</text>
+<text x="882" y="106" text-anchor="middle" font-size="11">OpenAPI a partir do Zod</text>
+<g stroke="currentColor" stroke-width="1.2" fill="none" marker-end="url(#a3)">
+<path d="M235 76 H273"/><path d="M490 76 H528"/><path d="M745 76 H783"/>
+</g>
+<g stroke="currentColor" fill="none" stroke-width="1.2">
+<rect x="20" y="168" width="178" height="74" rx="7"/>
+<rect x="213" y="168" width="178" height="74" rx="7"/>
+<rect x="406" y="168" width="178" height="74" rx="7"/>
+<rect x="599" y="168" width="178" height="74" rx="7"/>
+<rect x="792" y="168" width="188" height="74" rx="7"/>
+</g>
+<text x="109" y="190" text-anchor="middle" font-weight="600">Identidade</text>
+<text x="109" y="208" text-anchor="middle" font-size="11">igualdade exata, BSUID,</text>
+<text x="109" y="224" text-anchor="middle" font-size="11">nono dígito, papéis</text>
+<text x="302" y="190" text-anchor="middle" font-weight="600">Origem e atribuição</text>
+<text x="302" y="208" text-anchor="middle" font-size="11">5 campos com nível de prova,</text>
+<text x="302" y="224" text-anchor="middle" font-size="11">regra com nome e versão</text>
+<text x="495" y="190" text-anchor="middle" font-weight="600">CRM</text>
+<text x="495" y="208" text-anchor="middle" font-size="11">oportunidade por pessoa,</text>
+<text x="495" y="224" text-anchor="middle" font-size="11">curso e unidade; etapas</text>
+<text x="688" y="190" text-anchor="middle" font-weight="600">Conversas</text>
+<text x="688" y="208" text-anchor="middle" font-size="11">janela de 24 h, modo IA</text>
+<text x="688" y="224" text-anchor="middle" font-size="11">ou pessoa, fila da unidade</text>
+<text x="886" y="190" text-anchor="middle" font-weight="600">Regras e monitor</text>
+<text x="886" y="208" text-anchor="middle" font-size="11">cobertura por ponto, alertas</text>
+<text x="886" y="224" text-anchor="middle" font-size="11">com dono, conciliação</text>
+<path d="M690 124 V166" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#a3)"/>
+<text x="698" y="150" font-size="11">leem projeções</text>
+<g stroke="currentColor" fill="none" stroke-width="1.2">
+<rect x="20" y="290" width="215" height="92" rx="7"/>
+<rect x="275" y="290" width="215" height="92" rx="7"/>
+<rect x="530" y="290" width="215" height="92" rx="7"/>
+<rect x="785" y="290" width="195" height="92" rx="7"/>
+</g>
+<text x="127" y="312" text-anchor="middle" font-weight="700">Cofre de dados pessoais</text>
+<text x="127" y="332" text-anchor="middle" font-size="11">esquema próprio, cifra por</text>
+<text x="127" y="348" text-anchor="middle" font-size="11">pessoa, índice por HMAC</text>
+<text x="127" y="364" text-anchor="middle" font-size="11">apagar = destruir a chave</text>
+<text x="382" y="312" text-anchor="middle" font-weight="700">Ferramentas</text>
+<text x="382" y="332" text-anchor="middle" font-size="11">esquema, papel, aprovação,</text>
+<text x="382" y="348" text-anchor="middle" font-size="11">chave contra repetição;</text>
+<text x="382" y="364" text-anchor="middle" font-size="11">painel, IA e MCP usam as mesmas</text>
+<text x="637" y="312" text-anchor="middle" font-weight="700">Agente de IA</text>
+<text x="637" y="332" text-anchor="middle" font-size="11">triagem e resposta,</text>
+<text x="637" y="348" text-anchor="middle" font-size="11">Claude API, modo sombra,</text>
+<text x="637" y="364" text-anchor="middle" font-size="11">avaliação contra gabarito</text>
+<text x="882" y="312" text-anchor="middle" font-weight="700">Caixa de saída</text>
+<text x="882" y="332" text-anchor="middle" font-size="11">ERP, Chatwoot, WhatsApp,</text>
+<text x="882" y="348" text-anchor="middle" font-size="11">Meta, Google, RD; nova</text>
+<text x="882" y="364" text-anchor="middle" font-size="11">tentativa e fila de erro</text>
+<g stroke="currentColor" stroke-width="1.2" fill="none" marker-end="url(#a3)">
+<path d="M205 124 V288"/>
+<path d="M398 288 V124"/>
+<path d="M530 336 H492"/>
+<path d="M490 100 H508 V150 H591 V266 H882 V288"/>
+</g>
+<text x="212" y="272" font-size="11">texto e contato</text>
+<text x="406" y="272" font-size="11">ações viram eventos</text>
+<text x="700" y="260" font-size="11">eventos que pedem envio</text>
+</g>
+</svg>
+<figcaption>Componentes do núcleo. A seta cheia é escrita; a tracejada, leitura. Os módulos de domínio leem as projeções e gravam as decisões no log pelas ferramentas. Toda mudança de estado passa pelo log, e por isso cada ação de pessoa ou da IA tem autor, motivo e base registrados.</figcaption>
+</figure>
+
+<h3>Módulos</h3>
+<div class="wrap"><table>
+<tr><th>Módulo</th><th>Responsabilidade</th><th>É dono de</th></tr>
+<tr><td>Porta de entrada</td><td>um adaptador por fonte; confere assinatura, valida com limites de tamanho, grava o bruto necessário e responde</td><td>contratos de entrada</td></tr>
+<tr><td>Log de eventos</td><td>registro só de acréscimo, ordenado pelo horário do evento, com causa e correlação</td><td>a história completa</td></tr>
+<tr><td>Cofre</td><td>nome, telefone, e-mail e texto de mensagem, cifrados com uma chave por pessoa; busca por HMAC</td><td>dado pessoal</td></tr>
+<tr><td>Identidade</td><td>casa pessoa por BSUID, telefone (com a regra do nono dígito), e-mail ou id do ERP; propõe fusões</td><td>pessoa e papéis (aluna, paciente, lead)</td></tr>
+<tr><td>Origem e atribuição</td><td>toques com os 5 campos e o nível de prova; regra de atribuição versionada; prévia de regra nova</td><td>origem e atribuição</td></tr>
+<tr><td>CRM</td><td>oportunidade por pessoa, curso e unidade; etapas até a pré-matrícula; "ganha" só pelo ERP</td><td>oportunidade</td></tr>
+<tr><td>Conversas</td><td>estado de cada conversa: janela de 24 h, modo IA ou pessoa, fila da unidade, espelho no Chatwoot</td><td>roteamento</td></tr>
+<tr><td>Regras e monitor</td><td>cobertura por ponto de entrada, alertas com ação e dono, conciliação com plataformas e ERP</td><td>alertas e status dos pontos</td></tr>
+<tr><td>Ferramentas</td><td>registro tipado das ações, com papel, aprovação e chave contra repetição</td><td>política de ação</td></tr>
+<tr><td>Agente de IA</td><td>triagem, resposta com dado lido do ERP, passagem para pessoa</td><td>nada: só age por ferramentas</td></tr>
+<tr><td>Caixa de saída</td><td>entrega para fora com nova tentativa, espera crescente e fila de erro</td><td>pendências de envio</td></tr>
+</table></div>
+
+<h3>Modelo de dados</h3>
+<div class="cols c-1-1">
+<div>
+<ul>
+<li><code>log.events</code>: <code>seq</code>, <code>type</code>, <code>schema</code>, <code>source</code>, <code>external_id</code>, <code>occurred_at</code>, <code>recorded_at</code>, <code>actor</code>, <code>reason</code>, <code>based_on</code>, <code>correlation_id</code>, <code>payload</code> (jsonb, só referências ao cofre). <code>UNIQUE(source, external_id)</code>; gatilho e permissões impedem UPDATE e DELETE.</li>
+<li><code>pii.keys</code> e <code>pii.values</code>: chave de dado por pessoa, cifrada pela chave mestra; valores cifrados e HMAC para busca. Só o papel do cofre lê esse esquema.</li>
+<li><code>app.*</code>: projeções (pessoas, identificadores, papéis, toques, oportunidades, conversas, filas, pontos de entrada, links, leituras de QR, alertas, cobertura).</li>
+<li><code>ops.*</code>: caixa de saída, fila do pg-boss, quarentena, chaves de ferramentas, controle de migrações.</li>
+</ul>
+</div>
+<div>
+<pre>{
+  "seq": 184233,
+  "type": "whatsapp_message_received",
+  "schema": 2,
+  "source": "meta",
+  "external_id": "wamid.HBgL...",
+  "occurred_at": "2026-11-03T14:10:05-03:00",
+  "actor": "system:gateway",
+  "correlation_id": "conv_sp_8f2c",
+  "payload": {
+    "business_number": "sp",
+    "person_ref": "pii:7f3c...",
+    "text_ref": "pii:a91e...",
+    "referral": {
+      "source_id": "120226...",
+      "ctwa_clid": "Aff-n8..."
+    }
+  }
+}</pre>
+</div>
+</div>
+<h3>Regras de consistência</h3>
+<ul>
+<li><b>Escrever</b> é inserir no log e atualizar as projeções na mesma transação. Se a projeção falha, o evento fica e vai para a quarentena, revisada todo dia e reprocessada com a mesma chave.</li>
+<li><b>Ordem</b> é o horário do evento, não o de chegada. Evento atrasado entra no lugar certo; a projeção afetada é refeita.</li>
+<li><b>Regra nova</b> (atribuição, monitor) roda primeiro como prévia sobre o log inteiro e só depois vira padrão, com a versão gravada em cada conclusão.</li>
+<li><b>Refazer tudo</b> a partir do log é um comando; é ensaiado todo mês contra a cópia restaurada do backup.</li>
+</ul>
+<div class="answer"><b>Resposta objetiva:</b> tudo que acontece vira um evento imutável; o resto é visão calculada. Isso dá auditoria completa, correção sem apagar e mudança de regra com prévia.</div>
+
+<h2>4. Fluxos principais</h2>
+<h3>WhatsApp: da mensagem do lead à resposta da IA e da atendente</h3>
+<figure>
+<svg viewBox="0 0 1000 530" role="img" aria-label="Sequência: a mensagem do lead chega da Meta ao núcleo, que grava e responde em menos de um segundo; o worker resolve identidade e origem, espelha a conversa no Chatwoot, chama a IA com ferramentas e envia a resposta pela Meta; a resposta da atendente volta do Chatwoot ao núcleo e sai pela mesma saída.">
+<defs><marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+<g font-family="Inter, Segoe UI, sans-serif" font-size="11.5" fill="currentColor">
+<g stroke="currentColor" fill="#fff" stroke-width="1.2">
+<rect x="20" y="10" width="110" height="34" rx="5"/><rect x="160" y="10" width="110" height="34" rx="5"/><rect x="300" y="10" width="120" height="34" rx="5"/><rect x="450" y="10" width="120" height="34" rx="5"/><rect x="600" y="10" width="110" height="34" rx="5"/><rect x="740" y="10" width="110" height="34" rx="5"/><rect x="880" y="10" width="110" height="34" rx="5"/>
+</g>
+<g font-weight="600" text-anchor="middle">
+<text x="75" y="32">Lead</text><text x="215" y="32">Meta</text><text x="360" y="32">core-api</text><text x="510" y="32">core-worker</text><text x="655" y="32">Claude API</text><text x="795" y="32">Chatwoot</text><text x="935" y="32">Atendente</text>
+</g>
+<g stroke="currentColor" stroke-width="1" stroke-dasharray="3 4"><path d="M75 44V520"/><path d="M215 44V520"/><path d="M360 44V520"/><path d="M510 44V520"/><path d="M655 44V520"/><path d="M795 44V520"/><path d="M935 44V520"/></g>
+<g stroke="currentColor" stroke-width="1.3" fill="none" marker-end="url(#a4)">
+<path d="M75 74H211"/><path d="M215 108H356"/><path d="M360 176H506"/><path d="M510 244H791"/><path d="M510 278H651"/><path d="M510 380H219"/><path d="M215 414H79"/><path d="M935 448H799"/><path d="M795 482H364"/><path d="M360 510H506"/>
+</g>
+<g stroke="currentColor" stroke-width="1.3" fill="none" marker-end="url(#a4)" stroke-dasharray="6 4">
+<path d="M360 142H219"/><path d="M655 312H514"/><path d="M510 346H651"/>
+</g>
+<text x="80" y="68">1. escreve (ou clica no anúncio)</text>
+<text x="222" y="102">2. webhook assinado</text>
+<text x="222" y="136">3. 200 em menos de 1 s</text>
+<text x="367" y="170">4. job, na mesma transação</text>
+<rect x="455" y="190" width="110" height="38" rx="4" fill="#f1f1ee" stroke="currentColor" stroke-width="0.8"/>
+<text x="510" y="206" text-anchor="middle" font-size="10.5">5. identidade, toque,</text>
+<text x="510" y="221" text-anchor="middle" font-size="10.5">origem, janela 24 h</text>
+<text x="517" y="238">6. contato e mensagem (canal API)</text>
+<text x="517" y="272">7. triagem e resposta, com ferramentas</text>
+<text x="517" y="306">8. pede ferramenta: get_course_offer</text>
+<text x="517" y="340">9. preço e vagas lidos do ERP, com a hora</text>
+<text x="222" y="374">10. envio pela Graph API (caixa de saída)</text>
+<text x="82" y="408">11. resposta no celular</text>
+<text x="802" y="442">12. assume e responde</text>
+<text x="367" y="476">13. webhook da resposta, conferido</text>
+<text x="367" y="504">14. mesma saída: janela, template, registro</text>
+</g>
+</svg>
+<figcaption>Um único ponto recebe da Meta e um único ponto envia. Assim a origem do anúncio (referral e <code>ctwa_clid</code>) é gravada antes de qualquer outra coisa, a janela de 24 horas e as regras de template valem para a IA e para as pessoas, e trocar o Chatwoot não mexe no WhatsApp.</figcaption>
+</figure>
+
+<h3>Venda: da pré-matrícula à conversão nas plataformas</h3>
+<figure>
+<svg viewBox="0 0 1000 345" role="img" aria-label="Sequência: a atendente registra a pré-matrícula; o núcleo cria o pedido no ERP com o id da oportunidade; o ERP confirma o pagamento por webhook; o núcleo confere pessoa, curso e unidade, marca a oportunidade como ganha e envia as conversões às plataformas e ao RD.">
+<defs><marker id="a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+<g font-family="Inter, Segoe UI, sans-serif" font-size="11.5" fill="currentColor">
+<g stroke="currentColor" fill="#fff" stroke-width="1.2">
+<rect x="20" y="10" width="130" height="34" rx="5"/><rect x="235" y="10" width="130" height="34" rx="5"/><rect x="450" y="10" width="130" height="34" rx="5"/><rect x="665" y="10" width="130" height="34" rx="5"/><rect x="850" y="10" width="130" height="34" rx="5"/>
+</g>
+<g font-weight="600" text-anchor="middle"><text x="85" y="32">Atendente</text><text x="300" y="32">Núcleo</text><text x="515" y="32">ERP</text><text x="730" y="32">Meta e Google</text><text x="915" y="32">RD Station</text></g>
+<g stroke="currentColor" stroke-width="1" stroke-dasharray="3 4"><path d="M85 44V335"/><path d="M300 44V335"/><path d="M515 44V335"/><path d="M730 44V335"/><path d="M915 44V335"/></g>
+<g stroke="currentColor" stroke-width="1.3" fill="none" marker-end="url(#a5)">
+<path d="M85 72H296"/><path d="M300 104H511"/><path d="M515 200H304"/><path d="M300 266H726"/><path d="M300 298H911"/>
+</g>
+<g stroke="currentColor" stroke-width="1.3" fill="none" marker-end="url(#a5)" stroke-dasharray="6 4"><path d="M515 136H304"/><path d="M300 326H89"/></g>
+<text x="92" y="66">1. pré-matrícula (ferramenta, com aprovação)</text>
+<text x="307" y="98">2. cria pedido com id da oportunidade e chave</text>
+<text x="307" y="130">3. número do pedido</text>
+<rect x="440" y="148" width="150" height="32" rx="4" fill="#f1f1ee" stroke="currentColor" stroke-width="0.8"/>
+<text x="515" y="168" text-anchor="middle" font-size="10.5">4. pagamento; baixa a vaga</text>
+<text x="307" y="194">5. webhook: venda confirmada (assinado)</text>
+<rect x="222" y="212" width="156" height="38" rx="4" fill="#f1f1ee" stroke="currentColor" stroke-width="0.8"/>
+<text x="300" y="228" text-anchor="middle" font-size="10.5">6. confere pessoa, curso</text>
+<text x="300" y="243" text-anchor="middle" font-size="10.5">e unidade; ganha</text>
+<text x="307" y="260">7. conversão: só cursos, contato com hash, com consentimento</text>
+<text x="307" y="292">8. evento de venda (enquanto o RD for usado)</text>
+<text x="92" y="320">9. ganha no CRM e na ficha do Chatwoot</text>
+</g>
+</svg>
+<figcaption>Se pessoa, curso ou unidade não batem, a venda vai para a fila de conciliação e nada vira "ganha". Se o ERP não avisa (P4), uma conciliação diária puxa as vendas e cai no mesmo caminho a partir do passo 5.</figcaption>
+</figure>
+
+<h3>Outros caminhos</h3>
+<ul>
+<li><b>LP e formulário.</b> A página guarda UTMs, <code>gclid</code>, <code>fbclid</code>, <code>_fbc</code> e <code>_fbp</code> no primeiro acesso e envia tudo com o formulário ao núcleo, que grava, abre a oportunidade e repassa ao RD pela caixa de saída. Se o núcleo não responde, o formulário vai direto ao RD (caminho de volta) e a conciliação semanal recupera o lead.</li>
+<li><b>Link curto e QR.</b> <code>go.&lt;domínio&gt;/K7P2</code> grava a leitura (sem dado pessoal) e redireciona para o WhatsApp com o código no texto, ou para a LP com as UTMs. O código vira os 5 campos quando a mensagem chega.</li>
+<li><b>Hotmart.</b> O webhook traz o <code>sck</code> com o código curto; a venda é ligada à jornada pelo código e conciliada com o ERP, que continua a fonte oficial.</li>
+<li><b>Paciente modelo.</b> A IA só encaminha para a agenda da unidade; dado clínico não entra no núcleo além da conversa, guardada no cofre com acesso restrito (P7).</li>
+</ul>
+
+<h3>Falhas e como o sistema reage</h3>
+<div class="wrap"><table>
+<tr><th>Falha</th><th>Como é percebida</th><th>O que acontece</th></tr>
+<tr><td>Webhook repetido</td><td>chave única do log</td><td>descartado e contado; nenhum efeito duplicado</td></tr>
+<tr><td>Núcleo fora do ar</td><td>verificação externa a cada minuto</td><td>Meta reenvia por até 7 dias, Hotmart até 5 vezes; formulários vão ao RD; nada se perde</td></tr>
+<tr><td>ERP fora do ar</td><td>item mais velho da caixa de saída acima de 15 min</td><td>nova tentativa com espera crescente; a IA avisa e passa para pessoa; alerta ao profissional</td></tr>
+<tr><td>Chatwoot fora do ar</td><td>erro na entrega à API do Chatwoot</td><td>mensagens seguem no log; reenvio quando volta; atendimento de contingência na tela do núcleo</td></tr>
+<tr><td>Token da Meta inválido</td><td>primeiro 401 da Graph API</td><td>alerta imediato; envios param na caixa de saída até a troca, sem perda</td></tr>
+<tr><td>Evento malformado</td><td>validação na borda</td><td>400 para quem enviou; nada é gravado</td></tr>
+<tr><td>Evento válido que quebra a projeção</td><td>erro na transação</td><td>evento fica, entra na quarentena e é reprocessado depois da correção</td></tr>
+<tr><td>Venda sem oportunidade</td><td>conferência no passo 6</td><td>fila de conciliação com sugestão; uma pessoa decide</td></tr>
+<tr><td>Fusão de fichas errada</td><td>revisão humana</td><td>desfeita por evento; projeções refeitas</td></tr>
+</table></div>
+<div class="answer"><b>Resposta objetiva:</b> entra por um só lugar, sai por um só lugar, e cada passo grava antes de agir. Falha de parceiro vira espera com nova tentativa, nunca perda de dado ou venda duplicada.</div>
+
+<h2>5. Integrações</h2>
+<div class="wrap"><table>
+<tr><th>Sistema</th><th>Direção e forma</th><th>Autenticação</th><th>Chave contra repetição</th><th>Se falhar</th></tr>
+<tr><td>WhatsApp Cloud API (Meta)</td><td>entra por webhook; sai por <code>POST /{phone-number-id}/messages</code> na Graph API v26.0</td><td>assinatura <code>X-Hub-Signature-256</code> com o app secret; token de usuário do sistema</td><td><code>wamid</code>; <code>wamid</code> + status</td><td>Meta reenvia por até 7 dias; envio fica na caixa de saída</td></tr>
+<tr><td>Chatwoot</td><td>dois sentidos pelo canal API: o núcleo cria contato, conversa e mensagem; o Chatwoot avisa as respostas da equipe na URL de callback; uma aba de app de painel mostra a ficha</td><td>token de acesso da conta; segredo que o Chatwoot gera para verificar o webhook; tráfego só na rede interna</td><td>id da mensagem</td><td>conciliação a cada 5 min pela API do Chatwoot</td></tr>
+<tr><td>ERP</td><td>sai: pedido com id da oportunidade; entra: venda, cancelamento e estorno; consulta de catálogo e vagas</td><td>token e assinatura HMAC (a combinar, P4)</td><td>id da venda; id da oportunidade no pedido</td><td>conciliação diária; sem API, exportação diária e fila de conciliação</td></tr>
+<tr><td>Hotmart</td><td>entra: webhook 2.0.0 (aprovada, completa, cancelada, reembolsada, chargeback)</td><td><code>X-HOTMART-HOTTOK</code></td><td>id do evento e transação</td><td>reenvio até 5 vezes; histórico de 60 dias</td></tr>
+<tr><td>RD Station Marketing</td><td>sai durante a transição: eventos <code>conversion</code> e <code>sale</code></td><td>token da API</td><td>id do evento</td><td>caixa de saída; o formulário também pode ir direto</td></tr>
+<tr><td>Meta (Conversions API)</td><td>sai: Lead e Purchase de cursos, com <code>fbc</code>, <code>fbp</code>, <code>ctwa_clid</code> e e-mail e telefone com hash</td><td>token de acesso</td><td><code>event_id</code></td><td>caixa de saída; janela de 7 dias para o evento</td></tr>
+<tr><td>Google Ads (Data Manager API)</td><td>sai: conversões offline com <code>gclid</code>, <code>gbraid</code> ou <code>wbraid</code> e dados com hash</td><td>OAuth</td><td>id do pedido</td><td>caixa de saída</td></tr>
+<tr><td>GA4 e GTM</td><td>auditoria e leitura; nenhum dado pessoal em URL</td><td>conta da Clinic</td><td>—</td><td>—</td></tr>
+<tr><td>Claude API (Anthropic)</td><td>sai: Messages API com ferramentas e saída estruturada</td><td>chave por ambiente, com limite de gasto</td><td>id da mensagem do lead</td><td>sem resposta no tempo limite, passa para pessoa</td></tr>
+<tr><td>Provedor de identidade</td><td>entra: SSO da equipe pela Cloudflare Access</td><td>OIDC</td><td>—</td><td>acesso de emergência com conta guardada e auditada</td></tr>
+</table></div>
+<p class="note">Dados de saúde nunca vão para Meta e Google (Termos das Business Tools §1.h; LGPD art. 11). Eventos de conversão só saem com consentimento por finalidade registrado como evento.</p>
+<div class="answer"><b>Resposta objetiva:</b> cada integração tem autenticação, chave contra repetição e um plano para quando o outro lado falha. O ERP é a única peça com contrato ainda a combinar (P4), e o desenho já prevê conciliação se ele não avisar.</div>
+
+<h2>6. IA e agentes</h2>
+<h3>Como o agente funciona</h3>
+<ol>
+<li><b>Filtro antes do modelo.</b> Palavras de saúde (dor, inchaço, hematoma, reação, intercorrência) e de reclamação vão direto para pessoa. Janela de 24 horas fechada: nada automático.</li>
+<li><b>Triagem.</b> Uma chamada com saída estruturada devolve intenção, unidade, curso, confiança e se o assunto é sensível. Abaixo de 0,85 de confiança, passa para pessoa.</li>
+<li><b>Resposta.</b> O modelo recebe só o texto da conversa e uma ficha mínima (sem telefone nem e-mail) e age por ferramentas: lê preço e vagas do ERP, registra origem declarada, abre a oportunidade, encaminha e responde.</li>
+<li><b>Registro.</b> Cada chamada de ferramenta vira evento com autor "IA", motivo e base. Em modo sombra, a resposta é gravada sem envio, para comparar com a pessoa.</li>
+</ol>
+
+<h3>Ferramentas e permissões</h3>
+<div class="wrap"><table>
+<tr><th>Ferramenta</th><th>IA</th><th>Atendente</th><th>Gestor</th><th>Regra</th></tr>
+<tr><td><code>get_course_offer</code>, <code>explain_origin</code>, <code>origin_coverage</code></td><td>sim</td><td>sim</td><td>sim</td><td>leitura; resposta com fonte e hora</td></tr>
+<tr><td><code>route_conversation</code>, <code>record_declared_origin</code></td><td>sim</td><td>sim</td><td>sim</td><td>automático</td></tr>
+<tr><td><code>open_opportunity</code></td><td>com confiança ≥ 0,85</td><td>sim</td><td>sim</td><td>uma por pessoa, curso e unidade</td></tr>
+<tr><td><code>reply_to_conversation</code></td><td>só na janela e com dado lido</td><td>sim</td><td>sim</td><td>sai pela caixa de saída</td></tr>
+<tr><td><code>set_conversation_mode</code></td><td>só para passar a pessoa</td><td>sim</td><td>sim</td><td>automático</td></tr>
+<tr><td><code>advance_opportunity</code></td><td>não</td><td>sim</td><td>sim</td><td>só avança; "ganha" vem do ERP</td></tr>
+<tr><td><code>request_enrollment</code></td><td>prepara</td><td>aprova</td><td>sim</td><td>vira pedido no ERP</td></tr>
+<tr><td><code>propose_merge</code> / <code>approve_merge</code></td><td>propõe</td><td>propõe</td><td>aprova</td><td>reversível por evento</td></tr>
+<tr><td><code>set_entry_point_status</code></td><td>não</td><td>não</td><td>libera</td><td>rebaixar é automático; liberar exige teste</td></tr>
+<tr><td><code>send_template</code> (produção)</td><td>não</td><td>com aprovação</td><td>sim</td><td>exige opt-in registrado</td></tr>
+<tr><td><code>record_consent</code>, <code>erase_person</code> (produção)</td><td>não</td><td>consentimento</td><td>encarregado apaga</td><td>apagamento com dupla confirmação</td></tr>
+</table></div>
+
+<h3>Modelos e custo</h3>
+<p>A escolha sai do teste, não da tabela de preços: o mesmo conjunto de conversas avaliadas (o gabarito das correções humanas) mede acerto, passagem para pessoa, latência e custo por conversa resolvida. A primeira medição usa o modelo mais capaz com esforço baixo; um modelo menor só entra numa rota se empatar no gabarito.</p>
+<div class="wrap"><table>
+<tr><th>Modelo (Claude API)</th><th class="n">Entrada / saída por milhão de tokens</th><th>Papel candidato</th><th class="n">Custo estimado por 1.000 conversas</th></tr>
+<tr><td>Claude Opus 5.5 (<code>claude-opus-5-5</code>)</td><td class="n">US$ 4 / US$ 20</td><td>resposta com ferramentas, esforço baixo; primeira medição</td><td class="n">≈ US$ 60</td></tr>
+<tr><td>Claude Sonnet 5.5 (<code>claude-sonnet-5-5</code>)</td><td class="n">US$ 2 / US$ 10</td><td>resposta com ferramentas</td><td class="n">≈ US$ 30</td></tr>
+<tr><td>Claude Haiku 5.5 (<code>claude-haiku-5-5</code>)</td><td class="n">US$ 0,10 / US$ 0,50</td><td>triagem com saída estruturada</td><td class="n">≈ US$ 1,60</td></tr>
+</table></div>
+<p class="note">Premissas da estimativa: 4 turnos de IA por conversa; prefixo fixo de 5 mil tokens (instruções e ferramentas) servido do cache; 1,5 mil tokens novos de entrada e 400 de saída por turno, raciocínio incluído, contados no tokenizador atual; leitura de cache a US$ 0,20 (Opus 5.5), US$ 0,10 (Sonnet 5.5) e US$ 0,01 (Haiku 5.5) por milhão de tokens; escrita de cache diluída pelo tráfego contínuo. Preços de lista da Anthropic em 30/10/2026 (seção 16). Com 6 mil conversas por mês: cerca de US$ 360 só com Opus 5.5, US$ 180 com Sonnet 5.5, ou perto de US$ 10 se a triagem em Haiku 5.5 resolver a maior parte. Avaliações em lote saem pela Batch API, com 50% de desconto. A conta real sai do uso medido.</p>
+
+<h3>Controles</h3>
+<ul>
+<li><b>Contexto mínimo.</b> Nenhum telefone ou e-mail vai ao modelo; as ferramentas do agente só alcançam a pessoa da conversa, então uma mensagem maliciosa não chega a outra ficha.</li>
+<li><b>Saídas verificadas.</b> Ferramentas com esquema estrito; saída estruturada na triagem; respostas com número só se vierem de ferramenta de leitura do ERP; recusa do modelo tratada como passagem para pessoa.</li>
+<li><b>Custo sob controle.</b> Instruções e ferramentas fixas no começo do pedido para aproveitar o cache; limite de gasto por chave e por ambiente; alerta de custo por conversa.</li>
+<li><b>Dados no fornecedor.</b> A API não treina com os dados por padrão; Opus, Sonnet e Haiku 5.5 aceitam retenção zero por acordo com a Anthropic. A inferência roda nos EUA ou na rede global (não há região no Brasil), então o uso entra como transferência internacional, com cláusulas-padrão (seção 9).</li>
+<li><b>Troca de provedor.</b> A camada que chama o modelo é fina; ferramentas, instruções e histórico ficam com a Clinic. As mesmas ferramentas saem por MCP para qualquer modelo; o candidato novo roda em modo sombra contra o gabarito antes de entrar.</li>
+<li><b>Política do WhatsApp.</b> Atendimento automatizado com passagem para pessoa é permitido; os Termos §4.7 restringem "provedores de IA". A leitura é que um bot da própria Clinic fica fora; o jurídico confirma antes da fase 2.</li>
+</ul>
+<div class="answer"><b>Resposta objetiva:</b> o agente é um usuário a mais das ferramentas, com menos permissões; o modelo é escolhido por teste contra o gabarito humano, e o custo de IA para 6 mil conversas fica entre US$ 10 e US$ 360 por mês, conforme o modelo que passar no teste.</div>
+
+<h2>7. Dados e Grande Cérebro</h2>
+<ul>
+<li><b>Fonte de análise.</b> Na fase de 90 dias, uma réplica de leitura do PostgreSQL alimenta um esquema analítico com visões estáveis: funil por unidade, canal e campanha, com a regra de atribuição e a versão à vista; cobertura de origem por ponto; vendas e vagas copiadas do ERP todo dia.</li>
+<li><b>Ferramentas.</b> Metabase para painéis da gestão; Python (pandas ou DuckDB) para análises, num processo separado que só lê a réplica; agentes de análise usam ferramentas MCP somente de leitura.</li>
+<li><b>Agente de tráfego.</b> Um job diário lê investimento por campanha nas APIs de anúncios da Meta e do Google e grava como evento; a tela Campanhas cruza campanha, investimento, leads, vendas confirmadas e vagas. Mudar verba é sugestão com aprovação humana.</li>
+<li><b>Números oficiais.</b> Vendas, saldo, vagas, comissões e DRE ficam no ERP; o núcleo mostra e cita a fonte e a hora da leitura.</li>
+</ul>
+<p><b>"Por que Campinas vendeu menos nesta semana?"</b> A resposta segue uma ordem fixa: (1) qualidade da origem em Campinas (cobertura, alertas, pontos em auditoria); (2) números oficiais do ERP (vendas, cancelamentos, turmas lotadas); (3) funil do núcleo por canal, com regra e janela de atribuição; (4) investimento por campanha; (5) hipóteses ordenadas com evidência. A regra de atribuição aparece na resposta, e semanas com poucas vendas não sustentam conclusão forte.</p>
+<div class="answer"><b>Resposta objetiva:</b> as análises leem uma cópia, nunca o banco de produção, e sempre dizem qual regra de atribuição usaram; o número oficial continua no ERP.</div>
+
+<h2>8. Segurança</h2>
+<div class="wrap"><table>
+<tr><th>Área</th><th>Controle</th></tr>
+<tr><td>Acesso da equipe</td><td>Cloudflare Access na frente do painel, do Chatwoot e do Metabase, com SSO e MFA do provedor de identidade da Clinic; papéis por unidade no núcleo; caixas por unidade no Chatwoot; revisão de acessos todo mês e na saída de pessoas</td></tr>
+<tr><td>Rede</td><td>túnel de saída; nenhuma porta aberta; SSH só pela Access; firewall que nega tudo por padrão; banco só na rede interna</td></tr>
+<tr><td>Aplicação</td><td>assinatura conferida em todo webhook; validação com limites de tamanho; regras gerenciadas do WAF na borda (no plano Free, o conjunto gratuito; o conjunto completo e o OWASP pedem o plano Pro) e limite de requisições no núcleo; cabeçalhos de segurança (CSP, HSTS); dependências fixadas e revisadas automaticamente; instalação sem scripts de pacote</td></tr>
+<tr><td>Dados</td><td>TLS em todo o trajeto; cifra de campo no cofre (AES-256-GCM, chave por pessoa, chave mestra fora do banco); backups cifrados; logs sem dado pessoal</td></tr>
+<tr><td>Segredos</td><td>SOPS com age no repositório de infraestrutura, injetados no deploy; rotação a cada trimestre e na saída de pessoas; chaves separadas por ambiente</td></tr>
+<tr><td>Auditoria</td><td>toda ação de pessoa ou IA vira evento com autor, motivo e base; leitura de dado sensível também gera evento</td></tr>
+<tr><td>Incidentes</td><td>runbook de resposta; comunicação à ANPD e aos titulares em até 3 dias úteis (Resolução CD/ANPD nº 15/2024)</td></tr>
+</table></div>
+
+<h2>9. LGPD</h2>
+<div class="wrap"><table>
+<tr><th>Classe</th><th>Exemplos</th><th>Onde fica</th><th>Quem acessa</th><th>Pode sair para</th></tr>
+<tr><td>Pública</td><td>cursos, turmas, preços</td><td>ERP; cópia no núcleo</td><td>todos</td><td>site, IA</td></tr>
+<tr><td>Operacional</td><td>eventos sem pessoa, campanhas, códigos</td><td>log, projeções</td><td>equipe</td><td>painéis</td></tr>
+<tr><td>Pessoal</td><td>nome, telefone, e-mail, ids</td><td>cofre cifrado</td><td>atendimento da unidade</td><td>Meta e Google só com hash e consentimento; RD na transição</td></tr>
+<tr><td>Sensível (saúde)</td><td>queixa clínica, dado de paciente modelo</td><td>cofre com acesso restrito; prontuário no sistema clínico (P7)</td><td>equipe clínica</td><td>nunca para marketing; IA só com base legal e no mínimo</td></tr>
+</table></div>
+<ul>
+<li><b>Bases legais por finalidade.</b> Atendimento e matrícula: procedimentos preliminares e execução de contrato (art. 7º, V). Marketing e conversões para anúncios: consentimento (art. 7º, I). Dado de saúde: consentimento específico e destacado (art. 11). Cada consentimento e cada revogação viram evento, e a revogação desliga as automações daquela finalidade.</li>
+<li><b>Direitos do titular.</b> Acesso e portabilidade: exportação gerada do log e do cofre. Correção: evento de correção. Eliminação: destruir a chave da pessoa torna ilegível o que está no banco e nos backups, sem reescrever o log. Prazos do art. 19.</li>
+<li><b>Transferência internacional.</b> Meta, Google e Anthropic processam fora do Brasil (a Claude API só oferece inferência nos EUA ou global): cláusulas-padrão contratuais da ANPD (Resolução CD/ANPD nº 19/2024) e envio do mínimo necessário (art. 33). Servidores, banco e backups ficam em São Paulo.</li>
+<li><b>Retenção (proposta para o jurídico).</b> Lead sem matrícula: 24 meses após o último contato; aluno e paciente: prazo do contrato mais o prazo legal; logs técnicos: 90 dias. Expirado o prazo, a chave da pessoa é destruída.</li>
+<li><b>Relatório de impacto.</b> RIPD antes da fase 2 para dado de saúde e uso de IA, com o encarregado de dados.</li>
+</ul>
+<div class="answer"><b>Resposta objetiva:</b> o dado pessoal mora num cofre cifrado por pessoa, sai só com base legal e no mínimo, e apagar uma pessoa é destruir a chave dela, inclusive nos backups.</div>
+
+<h2>10. Infraestrutura e implantação</h2>
+<h3>Topologia por fase</h3>
+<div class="wrap"><table>
+<tr><th>Fase</th><th>Máquinas</th><th>Banco</th><th>O que entra</th></tr>
+<tr><td>2 semanas: modo sombra</td><td>1 servidor AWS Lightsail em São Paulo, 16 GB e 4 vCPU (US$ 84/mês), com Coolify v4</td><td>PostgreSQL no próprio servidor, WAL contínuo no S3 São Paulo</td><td>núcleo recebendo cópia dos eventos, gerador de links e QR, painel de cobertura; atendimento segue no fornecedor atual</td></tr>
+<tr><td>30 dias: piloto em 1 unidade</td><td>o mesmo servidor + Chatwoot; staging em Lightsail 4 GB (US$ 24/mês), que também roda a verificação externa</td><td>idem; Chatwoot com PostgreSQL e Redis próprios</td><td>número de WhatsApp da unidade piloto no núcleo e no Chatwoot; IA em modo sombra; venda do ERP ligada à jornada</td></tr>
+<tr><td>90 dias: 3 unidades</td><td>núcleo em Lightsail 8 GB e 2 vCPU (US$ 44/mês); Chatwoot em Lightsail 16 GB e 4 vCPU, o mínimo dele (US$ 84/mês)</td><td>RDS for PostgreSQL em São Paulo, db.t4g.medium Multi-AZ, com recuperação ponto a ponto, ligado ao Lightsail por peering de VPC; réplica de leitura quando o Grande Cérebro começar</td><td>todas as unidades; IA na fase 2 se passar no gabarito; Metabase</td></tr>
+</table></div>
+
+<h3>Domínios e ambientes</h3>
+<ul>
+<li><b>Domínios:</b> <code>app.</code> (painel), <code>atendimento.</code> (Chatwoot), <code>hooks.</code> (webhooks), <code>go.</code> (links curtos e QR), <code>bi.</code> (Metabase), cada um com o seu ambiente de staging.</li>
+<li><b>Ambientes:</b> local (o <code>docker compose</code> da demo), staging (dados sintéticos e número de teste da Meta) e produção. Dado real só em produção.</li>
+</ul>
+
+<h3>Pipeline</h3>
+<ol>
+<li><b>Pull request:</b> checagem de tipos, testes, <code>verify</code> dos cenários, auditoria de dependências e revisão.</li>
+<li><b>Merge na main:</b> imagem Docker com o commit como tag, publicada no GitHub Container Registry; deploy automático no staging e teste de fumaça.</li>
+<li><b>Produção:</b> aprovação manual no GitHub; deploy pelo webhook do Coolify; as migrações rodam antes da troca de imagem.</li>
+<li><b>Voltar atrás:</b> reimplantar a imagem anterior. As migrações seguem o padrão expandir e contrair: nenhuma quebra a versão que está no ar.</li>
+</ol>
+
+<h3>Backup e recuperação</h3>
+<ul>
+<li><b>Núcleo:</b> pgBackRest com WAL contínuo, cópia completa semanal e diferencial diária no S3 em São Paulo, cifrado; retenção de 35 dias com versionamento do bucket.</li>
+<li><b>Chatwoot:</b> cópia diária do banco e anexos no mesmo S3.</li>
+<li><b>Ensaio:</b> todo mês, restauração cronometrada no staging, com <code>verify</code> e refazimento das projeções. Sem ensaio, o backup não conta como existente.</li>
+<li><b>Fase de 90 dias:</b> banco gerenciado com réplica síncrona e recuperação ponto a ponto; o pgBackRest continua como segunda cópia, fora do provedor do banco.</li>
+</ul>
+<div class="answer"><b>Resposta objetiva:</b> um servidor no começo, dois servidores e banco gerenciado nas três unidades; tudo versionado, com deploy aprovado em um clique, volta à versão anterior em minutos e restauração ensaiada todo mês.</div>
+
+<h2>11. Observabilidade e operação</h2>
+<p>O núcleo emite logs estruturados sem dado pessoal, métricas e rastros com OpenTelemetry, seguindo cada evento do webhook ao envio. O coletor manda tudo para o Grafana Cloud no plano gratuito (10 mil séries de métricas, 50 GB de logs e 50 GB de rastros por mês, 14 dias de retenção, 3 usuários); erros de código vão para o Sentry no plano Developer (1 usuário, 5 mil erros por mês). Uma verificação externa a cada minuto, com Uptime Kuma no servidor de staging (outra máquina), confere <code>hooks.</code>, <code>app.</code> e <code>atendimento.</code>.</p>
+<div class="wrap"><table>
+<tr><th>Sinal</th><th>Limite</th><th>Quem recebe</th><th>Ação</th></tr>
+<tr><td>Webhooks com erro 5xx</td><td>acima de 1% em 5 min</td><td>profissional</td><td>runbook de entrada</td></tr>
+<tr><td>Caixa de saída parada</td><td>item mais velho acima de 15 min</td><td>profissional</td><td>ver o destino (ERP, Meta, Chatwoot)</td></tr>
+<tr><td>Quarentena</td><td>qualquer evento novo</td><td>profissional</td><td>revisão diária</td></tr>
+<tr><td>Primeira resposta da IA</td><td>p95 acima de 20 s</td><td>profissional</td><td>ver fila e tempo do modelo</td></tr>
+<tr><td>Passagem para pessoa</td><td>acima de 40% num dia</td><td>coordenação</td><td>revisar triagem e gabarito</td></tr>
+<tr><td>Cobertura de origem</td><td>3 leads seguidos sem campanha num ponto com 90% de base</td><td>dono do ponto</td><td>ponto volta para "em auditoria"</td></tr>
+<tr><td>Conciliação semanal</td><td>diferença acima de 5%</td><td>profissional e marketing</td><td>investigar o ponto</td></tr>
+<tr><td>Backup</td><td>WAL atrasado 10 min ou cópia com mais de 26 h</td><td>profissional</td><td>runbook de backup</td></tr>
+<tr><td>Token ou certificado</td><td>vencendo em 14 dias</td><td>profissional</td><td>trocar</td></tr>
+<tr><td>Máquina</td><td>disco acima de 80%; CPU acima de 80% por 15 min</td><td>profissional</td><td>ver seção 12</td></tr>
+</table></div>
+<ul>
+<li><b>Runbooks:</b> entrada falhando; ERP fora; token da Meta; Chatwoot fora (contingência na tela do núcleo); restauração do banco; vazamento de credencial; apagamento a pedido do titular.</li>
+<li><b>Rotina:</b> todo dia, 15 minutos (quarentena, alertas, caixa de saída); toda semana, conciliação; todo mês, ensaio de restauração, revisão de acessos, atualização de dependências e revisão de 60 leads do checklist.</li>
+<li><b>Fora do horário:</b> só alertas críticos acordam alguém (entrada parada, backup parado, caixa de saída parada há mais de 1 hora); o resto espera o dia útil. Com uma pessoa, isso é um combinado com o fundador.</li>
+</ul>
+
+<h2>12. Escala e evolução</h2>
+<div class="wrap"><table>
+<tr><th>Sinal</th><th>Limite</th><th>Próximo passo</th></tr>
+<tr><td>Tamanho do log</td><td>mais de 50 milhões de eventos ou consulta lenta</td><td>particionar por mês e arquivar o frio no S3</td></tr>
+<tr><td>CPU do núcleo</td><td>acima de 70% por dias</td><td>mais processos do worker, depois worker em outra máquina</td></tr>
+<tr><td>Atendimento</td><td>mais de 50 atendentes ou lentidão</td><td>Chatwoot em máquina maior, Sidekiq separado</td></tr>
+<tr><td>Análises pesando</td><td>consultas longas no primário</td><td>réplica de leitura (já prevista na fase de 90 dias)</td></tr>
+<tr><td>Nova unidade</td><td>decisão do negócio</td><td>cadastro: código, número, pontos de entrada e turmas; sem código novo</td></tr>
+<tr><td>Nova fonte de lead ou canal</td><td>decisão do negócio</td><td>um adaptador na porta de entrada; Instagram entra pelo Chatwoot</td></tr>
+<tr><td>Equipe técnica cresce</td><td>mais de 3 pessoas mexendo no mesmo módulo</td><td>separar o módulo em serviço só se o deploy conjunto virar gargalo</td></tr>
+</table></div>
+<div class="answer"><b>Resposta objetiva:</b> cada passo de crescimento tem um sinal que o dispara; nada é separado antes de doer, e unidades e canais novos entram por cadastro ou por um adaptador.</div>
+
+<h2>13. Custos mensais estimados</h2>
+<p>Preços de lista consultados em 30/10/2026, sem impostos (nenhuma das páginas informa tributos) e sem conversão de moeda. Fora da conta: o salário do profissional dedicado, domínios e o plano do GitHub que a Clinic já tiver.</p>
+<h3>Infraestrutura (US$ por mês)</h3>
+<div class="wrap"><table>
+<tr><th>Item</th><th class="n">Piloto (30 dias)</th><th class="n">3 unidades (90 dias)</th><th>Base do preço</th></tr>
+<tr><td>Servidor do núcleo (AWS Lightsail, São Paulo)</td><td class="n">84,00</td><td class="n">44,00</td><td>16 GB e 4 vCPU no piloto, com o Chatwoot junto; depois 8 GB e 2 vCPU</td></tr>
+<tr><td>Servidor de atendimento (Chatwoot)</td><td class="n">—</td><td class="n">84,00</td><td>16 GB e 4 vCPU; o Chatwoot pede no mínimo 4 vCPU e 4 GB</td></tr>
+<tr><td>Staging e verificação externa</td><td class="n">24,00</td><td class="n">24,00</td><td>Lightsail 4 GB e 2 vCPU</td></tr>
+<tr><td>PostgreSQL gerenciado (RDS, São Paulo)</td><td class="n">—</td><td class="n">222,65</td><td>db.t4g.medium Multi-AZ a US$ 0,275/h × 730 h, mais 50 GB gp3 a US$ 0,438</td></tr>
+<tr><td>S3 em São Paulo (backups e anexos)</td><td class="n">4,05</td><td class="n">8,10</td><td>100 GB e 200 GB a US$ 0,0405 por GB-mês</td></tr>
+<tr><td>Cloudflare (Free e Zero Trust Free)</td><td class="n">0,00</td><td class="n">0,00</td><td>DNS, CDN, TLS, DDoS, WAF gratuito; Access e Tunnel até 50 usuários</td></tr>
+<tr><td>Observabilidade (Grafana Cloud Free, Sentry Developer)</td><td class="n">0,00</td><td class="n">0,00</td><td>cabe nos limites gratuitos (seção 11)</td></tr>
+<tr><td>Licenças (Chatwoot Community, Coolify, Metabase OSS, pgBackRest, pg-boss)</td><td class="n">0,00</td><td class="n">0,00</td><td>código aberto</td></tr>
+<tr><th>Total</th><th class="n">≈ 112</th><th class="n">≈ 383</th><th>com a réplica de leitura para análise (+ US$ 110,96): ≈ 494</th></tr>
+</table></div>
+
+<h3>Uso (por mês)</h3>
+<div class="wrap"><table>
+<tr><th>Item</th><th class="n">Piloto (1 unidade)</th><th class="n">3 unidades</th><th>Premissas</th></tr>
+<tr><td>WhatsApp: mensagens de serviço</td><td class="n">R$ 385,00</td><td class="n">R$ 1.120,00</td><td>12 mil e 35 mil respostas dentro da janela; 1.000 grátis por número por mês; depois, R$ 0,035 cada</td></tr>
+<tr><td>WhatsApp: templates utility</td><td class="n">R$ 35,00</td><td class="n">R$ 105,00</td><td>1 mil e 3 mil confirmações e lembretes a R$ 0,035</td></tr>
+<tr><td>WhatsApp: templates marketing</td><td class="n">R$ 225,19</td><td class="n">R$ 643,40</td><td>700 e 2 mil reativações com opt-in, a R$ 0,3217</td></tr>
+<tr><th>WhatsApp, total</th><th class="n">≈ R$ 645</th><th class="n">≈ R$ 1.868</th><th>mensagens recebidas não são cobradas</th></tr>
+<tr><td>IA (Claude API)</td><td class="n">US$ 3 a 120</td><td class="n">US$ 10 a 360</td><td>2 mil e 6 mil conversas; de Haiku 5.5 a Opus 5.5 (seção 6)</td></tr>
+</table></div>
+<ul>
+<li><b>Mudança recente que pesa.</b> Desde 01/10/2026 a Meta cobra mensagens de serviço acima de 1.000 por número por mês e utility dentro da janela de 24 horas. Conversas que nascem de anúncio de clique para WhatsApp têm uma janela de até 7 dias sem cobrança quando a Clinic responde a tempo, o que baixa a conta das campanhas. A Meta só reajusta preço no início de cada trimestre, e contas de clientes do Brasil precisam passar a faturar em reais até 30/06/2027.</li>
+<li><b>Banco gerenciado mais barato.</b> O RDS Single-AZ com recuperação ponto a ponto custa cerca de US$ 111 por mês (instância e 50 GB); o Multi-AZ dobra a instância em troca de failover automático. O Supabase em São Paulo (Pro de US$ 25 mais US$ 100 de recuperação ponto a ponto por 7 dias, compute maior a cotar) é a alternativa.</li>
+<li><b>Hostinger como alternativa no piloto.</b> KVM 4 (4 vCPU, 16 GB, 200 GB NVMe) e KVM 2 de staging custam R$ 102,98 por mês nos 24 meses promocionais, pagos adiantado, e R$ 227,98 na renovação, mais o S3. Na fase de 90 dias não há banco gerenciado na mesma rede: o PostgreSQL seria operado pelo profissional, com réplica própria.</li>
+</ul>
+<div class="answer"><b>Resposta objetiva:</b> cerca de US$ 112 por mês de infraestrutura no piloto e US$ 383 nas três unidades; o maior custo variável passa a ser o WhatsApp, perto de R$ 1.870 por mês nas três unidades, e a IA fica entre US$ 10 e US$ 360, conforme o modelo que passar no teste.</div>
+
+<h2>14. Roteiro técnico</h2>
+<div class="wrap"><table>
+<tr><th>Fase</th><th>Implanta</th><th>Critério para avançar</th><th>Como recuar</th></tr>
+<tr><td>2 semanas</td><td>servidor, Cloudflare, núcleo em modo sombra, gerador de links e QR, 4 pontos corrigidos, backups com ensaio</td><td>4 pontos com teste ponta a ponta; cobertura medida por ponto</td><td>nada a desfazer: o núcleo só observa</td></tr>
+<tr><td>30 dias</td><td>Chatwoot e canal API, número da unidade piloto, ligação com o ERP, IA em modo sombra, staging</td><td>checklist de liberação cumprido (7 critérios do documento principal)</td><td>formulários direto ao RD em menos de 1 hora; número volta ao fornecedor atual</td></tr>
+<tr><td>90 dias</td><td>três unidades, banco gerenciado, segundo servidor, Metabase, IA na fase 2 se passar no gabarito</td><td>três unidades no checklist; acerto da triagem na meta combinada</td><td>unidade volta ao fornecedor; os dados seguem no log</td></tr>
+</table></div>
+
+<h2>15. Decisões e riscos</h2>
+<div class="wrap"><table>
+<tr><th>Decisão</th><th>Alternativa considerada</th><th>Por quê</th><th>Revisitar quando</th></tr>
+<tr><td>Monólito modular</td><td>microsserviços</td><td>uma pessoa, um deploy, transação única entre log e projeção</td><td>equipe maior com deploys disputados</td></tr>
+<tr><td>Log de eventos no PostgreSQL</td><td>Kafka ou banco de eventos dedicado</td><td>volume pequeno; um banco para operar; SQL para auditar</td><td>milhões de eventos por dia</td></tr>
+<tr><td>Fila e caixa de saída no PostgreSQL (pg-boss)</td><td>Redis, RabbitMQ ou SQS</td><td>gravar o evento e o pedido de envio na mesma transação; uma peça a menos</td><td>milhares de jobs por segundo</td></tr>
+<tr><td>Núcleo recebe da Meta e alimenta o Chatwoot pelo canal API</td><td>inbox nativa do Chatwoot, com o núcleo ouvindo os webhooks dele</td><td>origem gravada antes de tudo; um só ponto de envio; Chatwoot trocável</td><td>se o piloto precisar acelerar: começar pela nativa e trocar antes da expansão</td></tr>
+<tr><td>WhatsApp Cloud API direto</td><td>parceiro BSP</td><td>sem taxa intermediária; controle do webhook e da origem</td><td>se a Clinic quiser suporte contratado do canal</td></tr>
+<tr><td>AWS em São Paulo: Lightsail com Coolify, S3 e, nas três unidades, RDS</td><td>Hostinger no Brasil (mais barata no piloto); contêineres gerenciados (ECS)</td><td>um provedor e uma região; rede privada até o banco; dados no Brasil; sem migração no meio do caminho</td><td>se o custo pesar mais que a operação, ou se a equipe crescer</td></tr>
+<tr><td>Chatwoot Community, fork MIT</td><td>construir a caixa; Chatwoot pago</td><td>caixa pronta em dias; recursos pagos não são necessários</td><td>se SSO nativo ou SLA virarem exigência</td></tr>
+<tr><td>Claude API com ferramentas próprias e MCP</td><td>plataforma de bot fechada</td><td>ferramentas, histórico e gabarito ficam com a Clinic</td><td>a cada modelo novo, pelo gabarito</td></tr>
+<tr><td>Cofre com chave por pessoa</td><td>apagar linhas</td><td>apaga também nos backups sem reescrever o log</td><td>—</td></tr>
+<tr><td>Cloudflare Access para a equipe</td><td>construir login</td><td>SSO e MFA sem código; uma porta só</td><td>mais de 50 usuários (o plano gratuito vai até 50; depois, US$ 7 por usuário por mês)</td></tr>
+</table></div>
+<div class="wrap"><table>
+<tr><th>Risco</th><th>Efeito</th><th>Mitigação</th></tr>
+<tr><td>Dependência de uma pessoa</td><td>parada se ela sair ou adoecer</td><td>uma linguagem, poucos serviços, runbooks, decisões registradas, acesso de emergência com o fundador</td></tr>
+<tr><td>Política do WhatsApp para IA</td><td>bloqueio do número</td><td>API oficial, passagem para pessoa, IA por fases, parecer jurídico antes da fase 2</td></tr>
+<tr><td>ERP sem API ou sem aviso de venda (P4)</td><td>venda sem ligação automática</td><td>conciliação diária e fila de conciliação; id da oportunidade na matrícula</td></tr>
+<tr><td>Mudança no Chatwoot</td><td>quebra na integração</td><td>versão fixada, fork MIT, testes do canal API no staging antes de atualizar</td></tr>
+<tr><td>Servidor único nas fases iniciais</td><td>indisponibilidade</td><td>reenvio dos parceiros, backup contínuo com ensaio, banco gerenciado na fase de 90 dias</td></tr>
+<tr><td>Custo de IA acima do previsto</td><td>conta alta</td><td>limite por chave, cache, modelo escolhido por teste, alerta de custo por conversa</td></tr>
+<tr><td>Preço do WhatsApp (serviço cobrado desde 01/10/2026)</td><td>custo por conversa sobe</td><td>custo por conversa no painel; janela gratuita de anúncio aproveitada; templates só com opt-in e propósito claro; revisão a cada trimestre, quando a Meta reajusta</td></tr>
+<tr><td>Vídeo dos cursos online</td><td>termos da Cloudflare pedem serviço pago para vídeo</td><td>vídeos continuam na Hotmart; o sistema não serve vídeo</td></tr>
+</table></div>
+<div class="answer"><b>Resposta objetiva:</b> cada escolha tem alternativa e gatilho para revisão; os riscos maiores (pessoa única, política do WhatsApp, ERP) têm mitigação desenhada desde o piloto.</div>
+
+<h2>16. Fontes</h2>
+<p class="note">Consultadas em 30/10/2026, salvo indicação. Os fatos de WhatsApp, anúncios, Hotmart, RD e LGPD vêm da pesquisa de 28 e 29/10/2026 do documento principal (<code>docs/processo/pesquisa/</code>).</p>
+<ul class="src">
+<li><b>Versões:</b> PostgreSQL 18.6, suporte até 14/11/2030 (postgresql.org/support/versioning); Node.js 26 "Lithium" em Active LTS desde 28/10/2026, fim de vida em 30/04/2029 (github.com/nodejs/Release, schedule.json); Chatwoot v4.19.1 de 24/10/2026 (github.com/chatwoot/chatwoot/releases); pg-boss 12.38.0, MIT, PostgreSQL 13+ (github.com/timgit/pg-boss); Coolify v4.5.3, Apache-2.0 (github.com/coollabsio/coolify); pgBackRest 2.60.0, MIT (pgbackrest.org); SOPS v3.13.3, MPL-2.0, e age v1.3.2, BSD-3 (GitHub); Metabase v0.64.3, AGPL fora de <code>enterprise/</code>; Uptime Kuma 2.5.8, MIT; Redis 8 com opção AGPLv3 (redis.io/legal/licenses).</li>
+<li><b>Chatwoot:</b> requisitos (PostgreSQL com pgvector, Redis 7+, mínimo de 4 vCPU e 4 GB) em developers.chatwoot.com/self-hosted/deployment/requirements; canal API e URL de callback em chatwoot.com/hc/user-guide (how-to-create-an-api-channel-inbox); Dashboard Apps em chatwoot.com/hc/user-guide (how-to-use-dashboard-apps); Agent Bots em chatwoot.com/hc/user-guide (how-to-use-agent-bots).</li>
+<li><b>AWS (lista, São Paulo):</b> Lightsail em aws.amazon.com/lightsail/pricing e na Price List API (sa-east-1, publicação de 15/09/2026); RDS for PostgreSQL e S3 na Price List API (sa-east-1, publicações de 29/10 e 15/10/2026).</li>
+<li><b>Alternativas:</b> Hostinger VPS em hostinger.com/br/servidor-vps e lista de data centers no suporte da Hostinger; Supabase em supabase.com/pricing e docs de regiões e de PITR.</li>
+<li><b>Cloudflare:</b> plano Free (cloudflare.com/plans/free); DDoS (developers.cloudflare.com/ddos-protection); regras gerenciadas do WAF (developers.cloudflare.com/waf/managed-rules); Zero Trust Free até 50 usuários (cloudflare.com/plans/zero-trust-services); Tunnel gratuito para clientes Cloudflare One (blog.cloudflare.com/tunnel-hostname-routing, 18/09/2025); termos sobre vídeo nos planos sem serviço pago (FAQ do Cloudflare Tunnel).</li>
+<li><b>Meta:</b> preços do WhatsApp, faixa grátis de serviço, janela de anúncio e cobrança em reais (developers.facebook.com/documentation/business-messaging/whatsapp/pricing, vigentes em 01/10/2026); Graph API v26.0 (developers.facebook.com/docs/graph-api/changelog); webhooks, assinatura e reenvio por 7 dias, Termos §4.7 e Business Tools §1.h (pesquisa de 28/10/2026).</li>
+<li><b>Observabilidade:</b> Grafana Cloud Free (grafana.com/pricing); Sentry Developer (sentry.io/pricing).</li>
+<li><b>Anthropic:</b> preços, cache e Batch (platform.claude.com/docs/en/about-claude/pricing); residência de dados, só <code>us</code> e <code>global</code> (platform.claude.com/docs/en/manage-claude/data-residency); retenção zero por acordo (platform.claude.com/docs/en/manage-claude/api-and-data-retention).</li>
+<li><b>Normas:</b> LGPD (Lei 13.709/2018), arts. 7º, 11, 18, 19, 33, 46 e 48; Resolução CD/ANPD nº 15/2024 (comunicação de incidente); Resolução CD/ANPD nº 19/2024 (transferência internacional e cláusulas-padrão).</li>
+</ul>
+
+</div>
+</body>
+</html>
